@@ -330,7 +330,7 @@ export default function App() {
 
             restored.push({
               id: crypto.randomUUID(),
-              stream_id: DEMO_STREAM_1,
+              stream_id: activeStreamId,
               rol: 'assistant',
               tipo: 'widget',
               contenido: {
@@ -362,7 +362,7 @@ export default function App() {
               if (imagenJob && imagenJob.estado === 'fallido') {
                 restored.push({
                   id: crypto.randomUUID(),
-                  stream_id: DEMO_STREAM_1,
+                  stream_id: activeStreamId,
                   rol: 'assistant',
                   tipo: 'imagen_fallida',
                   contenido: { rfq_id: uuid },
@@ -371,7 +371,7 @@ export default function App() {
               } else {
                 restored.push({
                   id: crypto.randomUUID(),
-                  stream_id: DEMO_STREAM_1,
+                  stream_id: activeStreamId,
                   rol: 'assistant',
                   tipo: 'decision',
                   contenido: {
@@ -395,7 +395,7 @@ export default function App() {
             .maybeSingle();
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: DEMO_STREAM_1,
+            stream_id: activeStreamId,
             rol: 'assistant',
             tipo: 'imagen_lista',
             contenido: {
@@ -413,7 +413,7 @@ export default function App() {
         else if (rfq.estado === 'imagen_fallida' || rfq.estado === 'foto_pendiente') {
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: DEMO_STREAM_1,
+            stream_id: activeStreamId,
             rol: 'assistant',
             tipo: 'imagen_fallida',
             contenido: { rfq_id: uuid },
@@ -424,7 +424,7 @@ export default function App() {
         else if (rfq.estado === 'procesando_imagen') {
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: DEMO_STREAM_1,
+            stream_id: activeStreamId,
             rol: 'assistant',
             tipo: 'rfq-status',
             contenido: { rfq_id: uuid, estado: 'procesando_imagen' },
