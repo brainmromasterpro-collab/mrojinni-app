@@ -189,41 +189,53 @@ export default function App() {
     return [...prev, ...extraMsgs, widgetMsg];
   }
 
-  // Subscribe to agente_chat responses in mensajes table
+  // Subscribe + poll for agente_chat responses in mensajes table
+  const lastSeenMensajeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeStreamId) return;
 
+    function applyAssistantRow(row: { id: string; role: string; content: string; stream_id: string; created_at: string }) {
+      if (row.role !== 'assistant') return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === row.id)) return prev;
+        const withoutProcesando = prev.filter((m) => !(m.contenido as any)?.procesando);
+        return [...withoutProcesando, {
+          id: row.id,
+          stream_id: row.stream_id,
+          rol: 'assistant',
+          tipo: 'text',
+          contenido: { text: row.content },
+          created_at: row.created_at,
+        }];
+      });
+      lastSeenMensajeRef.current = row.id;
+    }
+
+    // Realtime subscription (primary)
     const channel = supabase
       .channel(`mensajes-${activeStreamId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'mensajes',
-          filter: `stream_id=eq.${activeStreamId}`,
-        },
-        (payload) => {
-          const row = payload.new as { id: string; role: string; content: string; stream_id: string; created_at: string };
-          if (row.role !== 'assistant') return;
-
-          // Replace the "Procesando..." bubble with Claude's real response
-          setMessages((prev) => {
-            const withoutProcesando = prev.filter((m) => !(m.contenido as any)?.procesando);
-            return [...withoutProcesando, {
-              id: row.id,
-              stream_id: row.stream_id,
-              rol: 'assistant',
-              tipo: 'text',
-              contenido: { text: row.content },
-              created_at: row.created_at,
-            }];
-          });
-        }
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `stream_id=eq.${activeStreamId}` },
+        (payload) => applyAssistantRow(payload.new as any))
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    // Polling fallback every 3s in case realtime is not enabled for mensajes
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('mensajes')
+        .select('*')
+        .eq('stream_id', activeStreamId)
+        .eq('role', 'assistant')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data[0] && data[0].id !== lastSeenMensajeRef.current) {
+        applyAssistantRow(data[0]);
+      }
+    }, 3000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
   }, [activeStreamId]);
 
   useEffect(() => {
