@@ -779,12 +779,13 @@ export default function App() {
     }]);
 
     // Route message to agente_chat via mensajes table
-    await supabase.from('mensajes').insert({
+    const { error: insertErr } = await supabase.from('mensajes').insert({
       stream_id: activeStreamId,
       role: 'user',
       content: text,
       procesado: false,
     });
+    if (insertErr) console.error('[chat] mensajes insert failed:', insertErr);
 
     // agente_chat will insert a response row with role='assistant' and procesado=true
     // The subscription below picks it up and replaces the procesando bubble
