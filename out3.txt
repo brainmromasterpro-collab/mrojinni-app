@@ -1,0 +1,32 @@
+irmedDocsRef.current.has(messageId)) return;
+    confirmedDocsRef.current.add(messageId);
+
+    setMessages((prev) => prev.map((msg) =>
+      msg.id === messageId ? { ...msg, contenido: { ...msg.contenido, resolved: true, count: products.length } } : msg
+    ));
+
+    if (products.length === 0) {
+      pushLog('Sin productos seleccionados');
+      return;
+    }
+
+    const isBulk = products.length >= 2;
+    const bulkId = isBulk ? crypto.randomUUID() : undefined;
+
+    if (isBulk && bulkId) {
+      setActiveBulkId(bulkId);
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        stream_id: activeStreamId,
+        rol: 'assistant',
+        tipo: 'bulk-widget',
+        contenido: { bulk_id: bulkId },
+        created_at: new Date().toISOString(),
+      }]);
+    }
+
+    pushLog(`Creando ${products.length} RFQ(s) desde documento...`);
+    for (const p of products) {
+      await createRFQAndSearch(p.marca, p.modelo, p.qty, false, undefined, bulkId);
+    }
+  }, [activeStrea

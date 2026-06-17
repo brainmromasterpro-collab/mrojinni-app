@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.ok {
+  background-color: #1D9E75;
+}
+
+.status-dot.running {
+  background-color: #E0A020;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+.status-dot.waiting {
+  background-color: #555;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #3A3A3C;
+  border-radius: 2px;
+}
+
+.scrollbar-light::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollbar-light::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out;
+}
+
+@keyframes recording-ring {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.animate-recording-ring {
+  animation: recording-ring 2s ease-out infinite;
+}
+
+.animate-recording-ring-delayed {
+  animation: recording-ring 2s ease-out infinite 0.7s;
+}
+
+@keyframes sound-wave {
+  0%, 100% { transform: scaleY(0.2); }
+  50% { transform: scaleY(1); }
+}
+
+.animate-sound-wave {
+  animation: sound-wave 0.6s ease-in-out infinite;
+  transform-origin: center;
+}
+
+@keyframes bounce-short {
+  0%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-3px); }
+  60% { transform: translateY(1px); }
+}
+
+.animate-bounce-short {
+  animation: bounce-short 0.5s ease-out;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
