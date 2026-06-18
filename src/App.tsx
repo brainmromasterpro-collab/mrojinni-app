@@ -803,16 +803,6 @@ export default function App() {
       created_at: new Date().toISOString(),
     }]);
 
-    const procesandoId = crypto.randomUUID();
-    setMessages((prev) => [...prev, {
-      id: procesandoId,
-      stream_id: activeStreamId,
-      rol: 'assistant',
-      tipo: 'text',
-      contenido: { text: 'Procesando...' },
-      created_at: new Date().toISOString(),
-    }]);
-
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
     await supabase.from('mensajes').insert({
