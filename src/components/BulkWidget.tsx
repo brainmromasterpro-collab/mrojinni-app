@@ -22,6 +22,7 @@ interface RFQRow {
   estado: string | null;
   foto_url: string | null;
   opcion_seleccionada: string | null;
+  crm_url: string | null;
   opciones: Opcion[];
 }
 
@@ -98,7 +99,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
     const { data, error } = await supabase
       .from('rfqs')
-      .select('*, opciones(*)')
+      .select('*, crm_url, opciones(*)')
       .eq('bulk_id', bulkId)
       .order('created_at', { ascending: true });
 
@@ -422,6 +423,18 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                 <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold ${badge.classes}`}>
                   {badge.label}
                 </span>
+
+                {status === 'published' && rfq.crm_url && (
+                  <a
+                    href={rfq.crm_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft hover:bg-brain-accent hover:text-white transition-colors"
+                  >
+                    Ver en CRM ↗
+                  </a>
+                )}
 
                 <div className="flex-shrink-0 w-28 text-right">
                   {status === 'searching' && (
