@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { Send, Paperclip, Mic, Image as ImageIcon, Search, PackageCheck, Radio, UserCheck, Keyboard, X, RotateCcw, Square, Upload, FileText, Check } from 'lucide-react';
 import type { Message, Stream } from '../lib/types';
 import FileUploadCard from './FileUploadCard';
@@ -707,6 +706,102 @@ function MobileVoiceInput({ input, setInput, onSend, onKeyDown, onPaste, onFileC
   );
 }
 
+function renderInline(text: string): React.ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i} className="font-semibold text-gray-900">{part.slice(2, -2)}</strong>;
+    }
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={i} className="px-1 py-0.5 rounded bg-brain-surface text-[11px] font-mono text-brain-accent">{part.slice(1, -1)}</code>;
+    }
+    return part;
+  });
+}
+
+function SimpleMarkdown({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Table: header line followed by separator line (---|---)
+    if (line.includes('|') && i + 1 < lines.length && /^\|?[\s\-|]+\|?$/.test(lines[i + 1])) {
+      const headers = line.split('|').map(c => c.trim()).filter(c => c);
+      i += 2;
+      const rows: string[][] = [];
+      while (i < lines.length && lines[i].includes('|')) {
+        rows.push(lines[i].split('|').map(c => c.trim()).filter(c => c));
+        i++;
+      }
+      elements.push(
+        <div key={`table-${i}`} className="my-2 rounded-lg border border-brain-border overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-brain-surface">
+              <tr>
+                {headers.map((h, j) => (
+                  <th key={j} className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-[#888] border-b border-brain-border">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brain-border">
+              {rows.map((row, j) => (
+                <tr key={j} className="hover:bg-brain-surface/50 transition-colors">
+                  {row.map((cell, k) => (
+                    <td key={k} className="px-3 py-2 text-[11px] text-gray-700">{renderInline(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+      continue;
+    }
+
+    // Unordered list
+    if (/^[-*] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*] /.test(lines[i])) {
+        items.push(lines[i].slice(2));
+        i++;
+      }
+      elements.push(
+        <ul key={`ul-${i}`} className="my-1 ml-4 space-y-0.5 list-disc">
+          {items.map((item, j) => <li key={j} className="text-[12px]">{renderInline(item)}</li>)}
+        </ul>
+      );
+      continue;
+    }
+
+    // Ordered list
+    if (/^\d+\. /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) {
+        items.push(lines[i].replace(/^\d+\. /, ''));
+        i++;
+      }
+      elements.push(
+        <ol key={`ol-${i}`} className="my-1 ml-4 space-y-0.5 list-decimal">
+          {items.map((item, j) => <li key={j} className="text-[12px]">{renderInline(item)}</li>)}
+        </ol>
+      );
+      continue;
+    }
+
+    // Empty line — skip
+    if (!line.trim()) { i++; continue; }
+
+    // Regular paragraph
+    elements.push(<p key={`p-${i}`} className="my-1">{renderInline(line)}</p>);
+    i++;
+  }
+
+  return <>{elements}</>;
+}
+
 function MessageBubble({ message }: { message: Message }) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
@@ -730,26 +825,7 @@ function MessageBubble({ message }: { message: Message }) {
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
       <div className="max-w-[75%] px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
-        <ReactMarkdown
-          components={{
-            p: ({ children }) => <p className="my-1">{children}</p>,
-            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
-            ul: ({ children }) => <ul className="my-1 ml-4 space-y-0.5 list-disc">{children}</ul>,
-            ol: ({ children }) => <ol className="my-1 ml-4 space-y-0.5 list-decimal">{children}</ol>,
-            li: ({ children }) => <li className="text-[12px]">{children}</li>,
-            code: ({ children }) => <code className="px-1 py-0.5 rounded bg-brain-surface text-[11px] font-mono text-brain-accent">{children}</code>,
-            table: ({ children }) => (
-              <div className="my-2 rounded-lg border border-brain-border overflow-hidden">
-                <table className="w-full">{children}</table>
-              </div>
-            ),
-            thead: ({ children }) => <thead className="bg-brain-surface">{children}</thead>,
-            th: ({ children }) => <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-[#888] border-b border-brain-border">{children}</th>,
-            tbody: ({ children }) => <tbody className="divide-y divide-brain-border">{children}</tbody>,
-            tr: ({ children }) => <tr className="hover:bg-brain-surface/50 transition-colors">{children}</tr>,
-            td: ({ children }) => <td className="px-3 py-2 text-[11px] text-gray-700">{children}</td>,
-          }}
-        >{contenido.text || ''}</ReactMarkdown>
+        <SimpleMarkdown text={contenido.text || ''} />
       </div>
     </div>
   );
