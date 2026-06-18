@@ -805,11 +805,23 @@ export default function App() {
 
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
-    await supabase.from('mensajes').insert({
+    const { error } = await supabase.from('mensajes').insert({
       stream_id: activeStreamId,
       role: 'user',
       content: text,
     });
+
+    if (error) {
+      console.error('mensajes insert error:', error);
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        stream_id: activeStreamId,
+        rol: 'assistant',
+        tipo: 'text',
+        contenido: { text: `Error al enviar mensaje: ${error.message}` },
+        created_at: new Date().toISOString(),
+      }]);
+    }
   }, [activeStreamId]);
 
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
