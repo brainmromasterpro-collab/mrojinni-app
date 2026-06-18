@@ -857,6 +857,29 @@ export default function App() {
     }
   }, [activeStreamId]);
 
+  // Polling fallback: checks notificaciones every 3s in case realtime is not enabled for that table
+  const lastSeenNotifRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeStreamId) return;
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('notificaciones')
+        .select('id, tipo, mensaje')
+        .eq('stream_id', activeStreamId)
+        .eq('tipo', 'bulk')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data?.[0] && data[0].id !== lastSeenNotifRef.current) {
+        lastSeenNotifRef.current = data[0].id;
+        try {
+          const parsed = JSON.parse(data[0].mensaje);
+          if (parsed.bulk_id) handleActiveBulkIdChange(parsed.bulk_id);
+        } catch { /* ignore */ }
+      }
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [activeStreamId, handleActiveBulkIdChange]);
+
   const handleImageExtracted = useCallback((data: { marca: string; modelo: string; qty: number; imageUrl: string }) => {
     if (!activeStreamId) return;
     const confirmMsg: Message = {
