@@ -99,7 +99,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
     const { data, error } = await supabase
       .from('rfqs')
-      .select('*, crm_url, opciones(*)')
+      .select('*, opciones(*)')
       .eq('bulk_id', bulkId)
       .order('created_at', { ascending: true });
 
