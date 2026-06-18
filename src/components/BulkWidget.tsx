@@ -330,7 +330,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       {/* Product preview: image left, info right */}
       {rfqs.length > 0 && (
         <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
-          <div className="flex-shrink-0 w-[90px] h-[90px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
+          <div className="flex-shrink-0 w-[108px] h-[108px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
             {rfqs[0].foto_url
               ? <img src={rfqs[0].foto_url} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
               : <Package className="w-9 h-9 text-brain-border" />}
