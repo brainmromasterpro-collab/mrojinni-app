@@ -12,6 +12,7 @@ interface Opcion {
   disponibilidad: string | null;
   score_ranking: number | null;
   fuente: string | null;
+  imagen_url: string | null;
 }
 
 interface RFQRow {
@@ -331,9 +332,14 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       {rfqs.length > 0 && (
         <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
           <div className="flex-shrink-0 w-[108px] h-[108px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
-            {rfqs[0].foto_url
-              ? <img src={rfqs[0].foto_url} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
-              : <Package className="w-9 h-9 text-brain-border" />}
+            {(() => {
+              const imgSrc = rfqs[0].foto_url
+                || rfqs[0].opciones?.find(o => o.imagen_url)?.imagen_url
+                || null;
+              return imgSrc
+                ? <img src={imgSrc} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
+                : <Package className="w-9 h-9 text-brain-border" />;
+            })()}
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
             <p className="text-[13px] font-semibold text-gray-900 truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
