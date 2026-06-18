@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Send, Paperclip, Mic, Image as ImageIcon, Search, PackageCheck, Radio, UserCheck, Keyboard, X, RotateCcw, Square, Upload, FileText, Check } from 'lucide-react';
 import type { Message, Stream } from '../lib/types';
 import FileUploadCard from './FileUploadCard';
