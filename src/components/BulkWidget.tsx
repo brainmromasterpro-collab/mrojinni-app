@@ -532,7 +532,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                       <img
                         src={rfq.foto_url}
                         alt={`${rfq.marca} ${rfq.modelo}`}
-                        className="w-16 h-16 object-contain rounded-lg border border-brain-border bg-white p-1"
+                        className="w-20 h-20 object-contain rounded-lg border border-brain-border bg-white p-1"
                       />
                     )}
                     <div className="flex-1 min-w-0">
