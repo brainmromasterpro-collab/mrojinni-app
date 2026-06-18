@@ -289,7 +289,7 @@ export default function App() {
       }
     }, 3000);
     return () => clearInterval(poll);
-  }, [activeStreamId, handleActiveBulkIdChange]);
+  }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function restoreActiveRFQs() {
