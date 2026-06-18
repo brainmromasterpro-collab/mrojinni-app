@@ -268,6 +268,29 @@ export default function App() {
     };
   }, [activeStreamId]);
 
+  // Poll notificaciones every 3s as fallback (realtime may not be enabled for this table)
+  const lastSeenNotifRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeStreamId) return;
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('notificaciones')
+        .select('id, tipo, mensaje')
+        .eq('stream_id', activeStreamId)
+        .eq('tipo', 'bulk')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data[0] && data[0].id !== lastSeenNotifRef.current) {
+        lastSeenNotifRef.current = data[0].id;
+        try {
+          const parsed = JSON.parse(data[0].mensaje);
+          if (parsed.bulk_id) handleActiveBulkIdChange(parsed.bulk_id);
+        } catch { /* ignore */ }
+      }
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [activeStreamId, handleActiveBulkIdChange]);
+
   useEffect(() => {
     async function restoreActiveRFQs() {
       // Populate bulkRfqIds for any RFQs that belong to a bulk
