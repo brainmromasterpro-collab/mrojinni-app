@@ -876,8 +876,11 @@ export default function App() {
     if (activeBulkIdRef.current === bulkId) return;
     setActiveBulkId(bulkId);
     setMessages((prev) => {
-      if (prev.some(m => m.tipo === 'bulk-widget' && (m.contenido as any)?.bulk_id === bulkId)) return prev;
-      return [...prev, {
+      const withoutProcessing = prev.filter(
+        (m) => !(m.rol === 'assistant' && m.tipo === 'text' && (m.contenido as any)?.text === 'Procesando...')
+      );
+      if (withoutProcessing.some(m => m.tipo === 'bulk-widget' && (m.contenido as any)?.bulk_id === bulkId)) return withoutProcessing;
+      return [...withoutProcessing, {
         id: crypto.randomUUID(),
         stream_id: activeStreamId ?? '',
         rol: 'assistant' as const,
