@@ -324,9 +324,10 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
             if (msg.tipo === 'imagen_fallida') {
               return <ImagenFallidaWidget key={msg.id} message={msg} onRetry={onImagenRetry} onManualUpload={onManualImageUpload} />;
             }
-            if (msg.tipo === 'parse_confirm') {
+            if (msg.tipo === 'parse_confirm' && (msg.contenido as any)?.source !== 'text') {
               return <ParseConfirmWidget key={msg.id} message={msg} onConfirm={onParseConfirm} />;
             }
+            if (msg.tipo === 'parse_confirm') return null;
             if (msg.tipo === 'docs_parsed') {
               return <DocsProductsWidget key={msg.id} message={msg} onConfirm={onDocsConfirm} />;
             }

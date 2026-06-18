@@ -222,6 +222,37 @@ export default function App() {
   }, [activeStreamId]);
 
   useEffect(() => {
+    if (!activeStreamId) return;
+    const channel = supabase
+      .channel(`mensajes-assistant-${activeStreamId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'mensajes',
+        filter: `stream_id=eq.${activeStreamId}`,
+      }, (payload: any) => {
+        const row = payload.new;
+        if (row.role !== 'assistant') return;
+        setMessages((prev) => {
+          // Remove the "Procesando..." placeholder
+          const withoutProcessing = prev.filter(
+            (m) => !(m.rol === 'assistant' && m.tipo === 'text' && (m.contenido as any)?.text === 'Procesando...')
+          );
+          return [...withoutProcessing, {
+            id: row.id ?? crypto.randomUUID(),
+            stream_id: activeStreamId,
+            rol: 'assistant',
+            tipo: 'text',
+            contenido: { text: row.content },
+            created_at: row.created_at ?? new Date().toISOString(),
+          }];
+        });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [activeStreamId]);
+
+  useEffect(() => {
     async function restoreActiveRFQs() {
       // Populate bulkRfqIds for any RFQs that belong to a bulk
       const { data: bulkRows } = await supabase
@@ -760,51 +791,35 @@ export default function App() {
     rfqPollsRef.current.set(uuid, pollInterval);
   }
 
-  const handleSendMessage = useCallback((text: string) => {
+  const handleSendMessage = useCallback(async (text: string) => {
     if (!activeStreamId) return;
 
-    const newMsg: Message = {
+    setMessages((prev) => [...prev, {
       id: crypto.randomUUID(),
       stream_id: activeStreamId,
       rol: 'user',
       tipo: 'text',
       contenido: { text },
       created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, newMsg]);
+    }]);
+
+    const procesandoId = crypto.randomUUID();
+    setMessages((prev) => [...prev, {
+      id: procesandoId,
+      stream_id: activeStreamId,
+      rol: 'assistant',
+      tipo: 'text',
+      contenido: { text: 'Procesando...' },
+      created_at: new Date().toISOString(),
+    }]);
+
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
-    const parsed = parseSearchIntent(text);
-    if (parsed) {
-      const confirmMsg: Message = {
-        id: crypto.randomUUID(),
-        stream_id: activeStreamId,
-        rol: 'assistant',
-        tipo: 'parse_confirm',
-        contenido: {
-          marca: parsed.marca,
-          modelo: parsed.modelo,
-          qty: 1,
-          urgente: parsed.urgente,
-          source: 'text',
-        },
-        created_at: new Date().toISOString(),
-      };
-      setMessages((prev) => [...prev, confirmMsg]);
-      pushLog('Busqueda detectada - esperando confirmacion');
-    } else {
-      setTimeout(() => {
-        const reply: Message = {
-          id: crypto.randomUUID(),
-          stream_id: activeStreamId,
-          rol: 'assistant',
-          tipo: 'text',
-          contenido: { text: 'Entendido. Para buscar un producto escribe la marca y modelo, por ejemplo: "Siemens SITRANS F US 1010"' },
-          created_at: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, reply]);
-      }, 400);
-    }
+    await supabase.from('mensajes').insert({
+      stream_id: activeStreamId,
+      role: 'user',
+      content: text,
+    });
   }, [activeStreamId]);
 
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
