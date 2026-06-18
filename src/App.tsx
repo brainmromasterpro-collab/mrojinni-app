@@ -189,55 +189,6 @@ export default function App() {
     return [...prev, ...extraMsgs, widgetMsg];
   }
 
-  // Subscribe + poll for agente_chat responses in mensajes table
-  const lastSeenMensajeRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!activeStreamId) return;
-
-    function applyAssistantRow(row: { id: string; role: string; content: string; stream_id: string; created_at: string }) {
-      if (row.role !== 'assistant') return;
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === row.id)) return prev;
-        const withoutProcesando = prev.filter((m) => !(m.contenido as any)?.procesando);
-        return [...withoutProcesando, {
-          id: row.id,
-          stream_id: row.stream_id,
-          rol: 'assistant',
-          tipo: 'text',
-          contenido: { text: row.content },
-          created_at: row.created_at,
-        }];
-      });
-      lastSeenMensajeRef.current = row.id;
-    }
-
-    // Realtime subscription (primary)
-    const channel = supabase
-      .channel(`mensajes-${activeStreamId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `stream_id=eq.${activeStreamId}` },
-        (payload) => applyAssistantRow(payload.new as any))
-      .subscribe();
-
-    // Polling fallback every 3s in case realtime is not enabled for mensajes
-    const poll = setInterval(async () => {
-      const { data } = await supabase
-        .from('mensajes')
-        .select('*')
-        .eq('stream_id', activeStreamId)
-        .eq('role', 'assistant')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (data && data[0] && data[0].id !== lastSeenMensajeRef.current) {
-        applyAssistantRow(data[0]);
-      }
-    }, 3000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(poll);
-    };
-  }, [activeStreamId]);
-
   useEffect(() => {
     // Clear all active polls when switching streams
     rfqPollsRef.current.forEach((interval) => clearInterval(interval));
@@ -342,7 +293,7 @@ export default function App() {
 
             restored.push({
               id: crypto.randomUUID(),
-              stream_id: activeStreamId,
+              stream_id: DEMO_STREAM_1,
               rol: 'assistant',
               tipo: 'widget',
               contenido: {
@@ -374,7 +325,7 @@ export default function App() {
               if (imagenJob && imagenJob.estado === 'fallido') {
                 restored.push({
                   id: crypto.randomUUID(),
-                  stream_id: activeStreamId,
+                  stream_id: DEMO_STREAM_1,
                   rol: 'assistant',
                   tipo: 'imagen_fallida',
                   contenido: { rfq_id: uuid },
@@ -383,7 +334,7 @@ export default function App() {
               } else {
                 restored.push({
                   id: crypto.randomUUID(),
-                  stream_id: activeStreamId,
+                  stream_id: DEMO_STREAM_1,
                   rol: 'assistant',
                   tipo: 'decision',
                   contenido: {
@@ -407,7 +358,7 @@ export default function App() {
             .maybeSingle();
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: activeStreamId,
+            stream_id: DEMO_STREAM_1,
             rol: 'assistant',
             tipo: 'imagen_lista',
             contenido: {
@@ -425,7 +376,7 @@ export default function App() {
         else if (rfq.estado === 'imagen_fallida' || rfq.estado === 'foto_pendiente') {
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: activeStreamId,
+            stream_id: DEMO_STREAM_1,
             rol: 'assistant',
             tipo: 'imagen_fallida',
             contenido: { rfq_id: uuid },
@@ -436,7 +387,7 @@ export default function App() {
         else if (rfq.estado === 'procesando_imagen') {
           restored.push({
             id: crypto.randomUUID(),
-            stream_id: activeStreamId,
+            stream_id: DEMO_STREAM_1,
             rol: 'assistant',
             tipo: 'rfq-status',
             contenido: { rfq_id: uuid, estado: 'procesando_imagen' },
@@ -473,6 +424,50 @@ export default function App() {
       rfqPollsRef.current.clear();
     };
   }, []);
+
+  function parseSearchIntent(text: string): { marca: string; modelo: string; urgente: boolean } | null {
+    const urgente = /urgente|asap|rush/i.test(text);
+    const cleaned = text
+      .replace(/urgente|asap|rush/gi, '')
+      .replace(/^(oye|hey|por favor|porfavor|porfa|please|pls)[\s,]*/i, '')
+      .replace(/^(busca|buscar|necesito|cotiza|cotizar|encuentra|quiero|dame|me puedes? (?:buscar|cotizar|encontrar)|search|find|quote|conseguir|consigue|consigueme|ocupo)[\s:\-—]*/i, '')
+      .replace(/^(el|la|un|una|uno|los|las|unos|unas|esto|este|esta)[\s]+/i, '')
+      .trim();
+
+    if (!cleaned) return null;
+
+    // Pattern: part numbers like "6ES7214-1AG40-0XB0", "TTD25C-20-0300F-H"
+    const partNumberMatch = cleaned.match(/([A-Z0-9]{2,}[\-\/][A-Z0-9\-\/]+)/i);
+    if (partNumberMatch) {
+      const idx = cleaned.indexOf(partNumberMatch[0]);
+      let before = cleaned.slice(0, idx).trim();
+      // Strip noise words that aren't brand names
+      before = before.replace(/^(modelo|parte|no\.?|num\.?|numero|ref\.?|referencia|de|marca)[\s:]*/i, '').trim();
+      // If 'before' still looks like a noise phrase (lowercase, common words), discard it
+      if (before && /^(el|la|un|una|los|las|de|del|para|por|con|esto|este|esta|ese|esa)$/i.test(before)) {
+        before = '';
+      }
+      return {
+        marca: before || '(detectar)',
+        modelo: partNumberMatch[0],
+        urgente,
+      };
+    }
+
+    // Pattern: "Marca Modelo" e.g. "Siemens SITRANS F US 1010"
+    // First word must be capitalized and NOT a common Spanish word
+    const words = cleaned.split(/\s+/);
+    const commonWords = /^(Hola|Oye|Por|Para|Con|Sin|Que|Como|Donde|Cual|Este|Esta|Ese|Esa|Tengo|Hay|Dame|Los|Las|Unos|Unas|Del|Modelo|Parte|Numero)$/i;
+    if (words.length >= 2 && /^[A-Z]/.test(words[0]) && !commonWords.test(words[0])) {
+      return {
+        marca: words[0],
+        modelo: words.slice(1).join(' '),
+        urgente,
+      };
+    }
+
+    return null;
+  }
 
   async function createRFQAndSearch(marca: string, modelo: string, qty: number, urgente: boolean, fotoUrl?: string, bulkId?: string) {
     if (!activeStreamId) return;
@@ -765,7 +760,7 @@ export default function App() {
     rfqPollsRef.current.set(uuid, pollInterval);
   }
 
-  const handleSendMessage = useCallback(async (text: string) => {
+  const handleSendMessage = useCallback((text: string) => {
     if (!activeStreamId) return;
 
     const newMsg: Message = {
@@ -779,28 +774,37 @@ export default function App() {
     setMessages((prev) => [...prev, newMsg]);
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
-    // Show "Procesando..." bubble while agente_chat responds
-    const procesandoId = crypto.randomUUID();
-    setMessages((prev) => [...prev, {
-      id: procesandoId,
-      stream_id: activeStreamId,
-      rol: 'assistant',
-      tipo: 'text',
-      contenido: { text: 'Procesando...', procesando: true },
-      created_at: new Date().toISOString(),
-    }]);
-
-    // Route message to agente_chat via mensajes table
-    const { error: insertErr } = await supabase.from('mensajes').insert({
-      stream_id: activeStreamId,
-      role: 'user',
-      content: text,
-      procesado: false,
-    });
-    if (insertErr) console.error('[chat] mensajes insert failed:', insertErr);
-
-    // agente_chat will insert a response row with role='assistant' and procesado=true
-    // The subscription below picks it up and replaces the procesando bubble
+    const parsed = parseSearchIntent(text);
+    if (parsed) {
+      const confirmMsg: Message = {
+        id: crypto.randomUUID(),
+        stream_id: activeStreamId,
+        rol: 'assistant',
+        tipo: 'parse_confirm',
+        contenido: {
+          marca: parsed.marca,
+          modelo: parsed.modelo,
+          qty: 1,
+          urgente: parsed.urgente,
+          source: 'text',
+        },
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, confirmMsg]);
+      pushLog('Busqueda detectada - esperando confirmacion');
+    } else {
+      setTimeout(() => {
+        const reply: Message = {
+          id: crypto.randomUUID(),
+          stream_id: activeStreamId,
+          rol: 'assistant',
+          tipo: 'text',
+          contenido: { text: 'Entendido. Para buscar un producto escribe la marca y modelo, por ejemplo: "Siemens SITRANS F US 1010"' },
+          created_at: new Date().toISOString(),
+        };
+        setMessages((prev) => [...prev, reply]);
+      }, 400);
+    }
   }, [activeStreamId]);
 
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
@@ -1554,7 +1558,7 @@ export default function App() {
 
   const handleDecision = useCallback(async (messageId: string, approved: boolean) => {
     const targetMsg = messages.find((m) => m.id === messageId);
-    const rfqId = targetMsg?.contenido?.rfq_id as string | undefined;
+    const rfqId = targetMsg?.contenido?.rfq_id;
 
     setMessages((prev) => prev.map((msg) => {
       if (msg.id === messageId) {

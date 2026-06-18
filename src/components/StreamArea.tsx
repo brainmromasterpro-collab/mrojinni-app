@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { Send, Paperclip, Mic, Image as ImageIcon, Search, PackageCheck, Radio, UserCheck, Keyboard, X, RotateCcw, Square, Upload, FileText, Check } from 'lucide-react';
 import type { Message, Stream } from '../lib/types';
 import FileUploadCard from './FileUploadCard';
@@ -729,8 +728,8 @@ function MessageBubble({ message }: { message: Message }) {
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brain-accent flex items-center justify-center">
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
-      <div className="max-w-[75%] px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm prose prose-sm max-w-none prose-table:text-[11px] prose-p:my-1 prose-ul:my-1 prose-li:my-0">
-        <ReactMarkdown>{contenido.text || ''}</ReactMarkdown>
+      <div className="max-w-[75%] px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
+        {contenido.text || ''}
       </div>
     </div>
   );
