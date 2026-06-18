@@ -221,35 +221,51 @@ export default function App() {
     return () => { cancelled = true; };
   }, [activeStreamId]);
 
+  // Subscribe + poll for agente_chat responses in mensajes table
+  const lastSeenMensajeRef = useRef<string | null>(null);
   useEffect(() => {
     if (!activeStreamId) return;
+
+    function applyAssistantRow(row: { id: string; role: string; content: string; stream_id: string; created_at: string }) {
+      if (row.role !== 'assistant') return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === row.id)) return prev;
+        const withoutProcesando = prev.filter((m) => !(m.contenido as any)?.procesando);
+        return [...withoutProcesando, {
+          id: row.id,
+          stream_id: row.stream_id,
+          rol: 'assistant',
+          tipo: 'text',
+          contenido: { text: row.content },
+          created_at: row.created_at,
+        }];
+      });
+      lastSeenMensajeRef.current = row.id;
+    }
+
     const channel = supabase
-      .channel(`mensajes-assistant-${activeStreamId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'mensajes',
-        filter: `stream_id=eq.${activeStreamId}`,
-      }, (payload: any) => {
-        const row = payload.new;
-        if (row.role !== 'assistant') return;
-        setMessages((prev) => {
-          // Remove the "Procesando..." placeholder
-          const withoutProcessing = prev.filter(
-            (m) => !(m.rol === 'assistant' && m.tipo === 'text' && (m.contenido as any)?.text === 'Procesando...')
-          );
-          return [...withoutProcessing, {
-            id: row.id ?? crypto.randomUUID(),
-            stream_id: activeStreamId,
-            rol: 'assistant',
-            tipo: 'text',
-            contenido: { text: row.content },
-            created_at: row.created_at ?? new Date().toISOString(),
-          }];
-        });
-      })
+      .channel(`mensajes-${activeStreamId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `stream_id=eq.${activeStreamId}` },
+        (payload) => applyAssistantRow(payload.new as any))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from('mensajes')
+        .select('*')
+        .eq('stream_id', activeStreamId)
+        .eq('role', 'assistant')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data[0] && data[0].id !== lastSeenMensajeRef.current) {
+        applyAssistantRow(data[0]);
+      }
+    }, 3000);
+
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+    };
   }, [activeStreamId]);
 
   useEffect(() => {
@@ -803,51 +819,25 @@ export default function App() {
       created_at: new Date().toISOString(),
     }]);
 
+    setMessages((prev) => [...prev, {
+      id: crypto.randomUUID(),
+      stream_id: activeStreamId,
+      rol: 'assistant',
+      tipo: 'text',
+      contenido: { text: 'Procesando...', procesando: true },
+      created_at: new Date().toISOString(),
+    }]);
+
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
-    const sentAt = new Date().toISOString();
-    const { error } = await supabase.from('mensajes').insert({
+    const { error: insertErr } = await supabase.from('mensajes').insert({
       stream_id: activeStreamId,
       role: 'user',
       content: text,
+      procesado: false,
     });
-
-    if (error) {
-      console.error('mensajes insert error:', error);
-      setMessages((prev) => [...prev, {
-        id: crypto.randomUUID(),
-        stream_id: activeStreamId,
-        rol: 'assistant',
-        tipo: 'text',
-        contenido: { text: `Error al enviar mensaje: ${error.message}` },
-        created_at: new Date().toISOString(),
-      }]);
-      return;
-    }
-
-    // Poll notificaciones as fallback in case realtime subscription misses the event
-    const streamIdAtSend = activeStreamId;
-    let attempts = 0;
-    const poll = setInterval(async () => {
-      attempts++;
-      if (attempts > 20) { clearInterval(poll); return; } // stop after ~60s
-      const { data } = await supabase
-        .from('notificaciones')
-        .select('mensaje, tipo')
-        .eq('stream_id', streamIdAtSend)
-        .eq('tipo', 'bulk')
-        .gte('created_at', sentAt)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) {
-        clearInterval(poll);
-        try {
-          const parsed = JSON.parse(data[0].mensaje);
-          if (parsed.bulk_id) handleActiveBulkIdChange(parsed.bulk_id);
-        } catch { /* ignore */ }
-      }
-    }, 3000);
-  }, [activeStreamId, handleActiveBulkIdChange]);
+    if (insertErr) console.error('[chat] mensajes insert failed:', insertErr);
+  }, [activeStreamId]);
 
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
     setMessages((prev) => prev.map((msg) =>
@@ -903,9 +893,7 @@ export default function App() {
     if (activeBulkIdRef.current === bulkId) return;
     setActiveBulkId(bulkId);
     setMessages((prev) => {
-      const withoutProcessing = prev.filter(
-        (m) => !(m.rol === 'assistant' && m.tipo === 'text' && (m.contenido as any)?.text === 'Procesando...')
-      );
+      const withoutProcessing = prev.filter((m) => !(m.contenido as any)?.procesando);
       if (withoutProcessing.some(m => m.tipo === 'bulk-widget' && (m.contenido as any)?.bulk_id === bulkId)) return withoutProcessing;
       return [...withoutProcessing, {
         id: crypto.randomUUID(),
