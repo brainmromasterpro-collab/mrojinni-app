@@ -805,6 +805,7 @@ export default function App() {
 
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
+    const sentAt = new Date().toISOString();
     const { error } = await supabase.from('mensajes').insert({
       stream_id: activeStreamId,
       role: 'user',
@@ -821,8 +822,32 @@ export default function App() {
         contenido: { text: `Error al enviar mensaje: ${error.message}` },
         created_at: new Date().toISOString(),
       }]);
+      return;
     }
-  }, [activeStreamId]);
+
+    // Poll notificaciones as fallback in case realtime subscription misses the event
+    const streamIdAtSend = activeStreamId;
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      if (attempts > 20) { clearInterval(poll); return; } // stop after ~60s
+      const { data } = await supabase
+        .from('notificaciones')
+        .select('mensaje, tipo')
+        .eq('stream_id', streamIdAtSend)
+        .eq('tipo', 'bulk')
+        .gte('created_at', sentAt)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (data && data.length > 0) {
+        clearInterval(poll);
+        try {
+          const parsed = JSON.parse(data[0].mensaje);
+          if (parsed.bulk_id) handleActiveBulkIdChange(parsed.bulk_id);
+        } catch { /* ignore */ }
+      }
+    }, 3000);
+  }, [activeStreamId, handleActiveBulkIdChange]);
 
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
     setMessages((prev) => prev.map((msg) =>
