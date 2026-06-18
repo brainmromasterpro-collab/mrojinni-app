@@ -34,6 +34,8 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'foto_lista') return 'image_ready';
   if (rfq.estado === 'procesando_imagen') return 'processing_image';
   if (rfq.estado === 'foto_pendiente') return 'image_pending';
+  if (rfq.estado === 'publicacion_fallida') return 'no_results';
+  if (rfq.estado === 'imagen_fallida') return 'image_pending';
   const searchingStates = ['recibido', 'buscando'];
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
   const opciones = rfq.opciones || [];
@@ -328,10 +330,10 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       {/* Product preview: image left, info right */}
       {rfqs.length > 0 && (
         <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
-          <div className="flex-shrink-0 w-[72px] h-[72px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
+          <div className="flex-shrink-0 w-[90px] h-[90px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
             {rfqs[0].foto_url
               ? <img src={rfqs[0].foto_url} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
-              : <Package className="w-7 h-7 text-brain-border" />}
+              : <Package className="w-9 h-9 text-brain-border" />}
           </div>
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
             <p className="text-[13px] font-semibold text-gray-900 truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
