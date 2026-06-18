@@ -729,7 +729,26 @@ function MessageBubble({ message }: { message: Message }) {
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
       <div className="max-w-[75%] px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
-        {contenido.text || ''}
+        <ReactMarkdown
+          components={{
+            p: ({ children }) => <p className="my-1">{children}</p>,
+            strong: ({ children }) => <strong className="font-semibold text-gray-900">{children}</strong>,
+            ul: ({ children }) => <ul className="my-1 ml-4 space-y-0.5 list-disc">{children}</ul>,
+            ol: ({ children }) => <ol className="my-1 ml-4 space-y-0.5 list-decimal">{children}</ol>,
+            li: ({ children }) => <li className="text-[12px]">{children}</li>,
+            code: ({ children }) => <code className="px-1 py-0.5 rounded bg-brain-surface text-[11px] font-mono text-brain-accent">{children}</code>,
+            table: ({ children }) => (
+              <div className="my-2 rounded-lg border border-brain-border overflow-hidden">
+                <table className="w-full">{children}</table>
+              </div>
+            ),
+            thead: ({ children }) => <thead className="bg-brain-surface">{children}</thead>,
+            th: ({ children }) => <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase text-[#888] border-b border-brain-border">{children}</th>,
+            tbody: ({ children }) => <tbody className="divide-y divide-brain-border">{children}</tbody>,
+            tr: ({ children }) => <tr className="hover:bg-brain-surface/50 transition-colors">{children}</tr>,
+            td: ({ children }) => <td className="px-3 py-2 text-[11px] text-gray-700">{children}</td>,
+          }}
+        >{contenido.text || ''}</ReactMarkdown>
       </div>
     </div>
   );
