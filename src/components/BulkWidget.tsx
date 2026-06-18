@@ -19,7 +19,6 @@ interface RFQRow {
   rfq_id: string;
   marca: string;
   modelo: string;
-  descripcion: string | null;
   estado: string | null;
   foto_url: string | null;
   opcion_seleccionada: string | null;
@@ -100,7 +99,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
     const { data, error } = await supabase
       .from('rfqs')
-      .select('*, crm_url, descripcion, opciones(*)')
+      .select('*, crm_url, opciones(*)')
       .eq('bulk_id', bulkId)
       .order('created_at', { ascending: true });
 
@@ -326,36 +325,24 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
         )}
       </div>
 
-      {/* Product preview — shown when there's exactly 1 product or as a summary of the first */}
-      {rfqs.length > 0 && (() => {
-        const first = rfqs[0];
-        return (
-          <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
-            {/* Left: image or placeholder */}
-            <div className="flex-shrink-0 w-[72px] h-[72px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
-              {first.foto_url ? (
-                <img src={first.foto_url} alt={`${first.marca} ${first.modelo}`} className="w-full h-full object-contain p-1" />
-              ) : (
-                <Package className="w-7 h-7 text-brain-border" />
-              )}
-            </div>
-            {/* Right: product info */}
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
-              <p className="text-[12px] font-semibold text-gray-900 truncate">{first.marca} {first.modelo}</p>
-              {first.descripcion && (
-                <p className="text-[11px] text-[#888] truncate">{first.descripcion}</p>
-              )}
-              <div className="flex items-center gap-3 mt-0.5">
-                <span className="text-[10px] text-[#aaa]">Parte <span className="font-mono text-gray-600">{first.modelo}</span></span>
-                {first.marca && <span className="text-[10px] text-[#aaa]">Marca <span className="text-gray-600">{first.marca}</span></span>}
-              </div>
-              {rfqs.length > 1 && (
-                <p className="text-[10px] text-[#aaa] mt-0.5">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más</p>
-              )}
-            </div>
+      {/* Product preview: image left, info right */}
+      {rfqs.length > 0 && (
+        <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
+          <div className="flex-shrink-0 w-[72px] h-[72px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
+            {rfqs[0].foto_url
+              ? <img src={rfqs[0].foto_url} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
+              : <Package className="w-7 h-7 text-brain-border" />}
           </div>
-        );
-      })()}
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+            <p className="text-[13px] font-semibold text-gray-900 truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-[#aaa]">Parte <span className="font-mono text-gray-700">{rfqs[0].modelo}</span></span>
+              {rfqs[0].marca && <span className="text-[10px] text-[#aaa]">Marca <span className="text-gray-700">{rfqs[0].marca}</span></span>}
+            </div>
+            {rfqs.length > 1 && <p className="text-[10px] text-[#aaa]">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más</p>}
+          </div>
+        </div>
+      )}
 
       {/* Progress bar */}
       <div className="px-4 py-2 border-b border-brain-border">
