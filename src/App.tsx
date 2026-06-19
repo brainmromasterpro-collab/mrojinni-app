@@ -1183,7 +1183,7 @@ export default function App() {
     rfqPollsRef.current.set(uuid, pollInterval);
   }, [activeStreamId]);
 
-  const handleFileUploaded = useCallback(async (file: { name: string; type: string; size: number; url: string }) => {
+  const handleFileUploaded = useCallback(async (file: { name: string; type: string; size: number; url: string }, userText?: string) => {
     if (!activeStreamId) return;
     const fileMsg: Message = {
       id: crypto.randomUUID(),
@@ -1319,7 +1319,40 @@ export default function App() {
         const result = await response.json();
 
         if (result.products && result.products.length > 0) {
-          if (result.products.length === 1) {
+          if (userText) {
+            // User gave explicit intent — send to Claude with product list
+            const productList = result.products
+              .map((p: { marca?: string; modelo?: string; qty?: number }) =>
+                `- ${[p.marca, p.modelo].filter(Boolean).join(' ')}${(p.qty ?? 1) > 1 ? ` x${p.qty}` : ''}`)
+              .join('\n');
+            const fullMessage = `${userText}\n\n[${result.products.length} productos extraídos de "${file.name}"]\n${productList}`;
+            // Show user text bubble in UI
+            setMessages((prev) => [...prev, {
+              id: crypto.randomUUID(),
+              stream_id: activeStreamId!,
+              rol: 'user',
+              tipo: 'text',
+              contenido: { text: userText },
+              created_at: new Date().toISOString(),
+            }]);
+            // Show "procesando" bubble
+            setMessages((prev) => [...prev, {
+              id: crypto.randomUUID(),
+              stream_id: activeStreamId!,
+              rol: 'assistant',
+              tipo: 'rfq-log',
+              contenido: { text: 'Claude está procesando tu solicitud...', status: 'querying', procesando: true },
+              created_at: new Date().toISOString(),
+            }]);
+            // Send to Claude via mensajes table
+            await supabase.from('mensajes').insert({
+              stream_id: activeStreamId,
+              role: 'user',
+              content: fullMessage,
+              procesado: false,
+            });
+            pushLog(`"${userText}" — ${result.products.length} productos de "${file.name}" enviados a Claude`);
+          } else if (result.products.length === 1) {
             const p = result.products[0];
             handleImageExtracted({
               marca: p.marca || '(detectar)',

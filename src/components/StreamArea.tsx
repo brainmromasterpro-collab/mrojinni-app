@@ -15,7 +15,7 @@ interface StreamAreaProps {
   onSendMessage: (text: string) => void;
   onRFQSubmitted: (rfqId: string, uuid: string, summary: { marca: string; modelo: string; qty: number; attachmentCount: number }) => void;
   onCloseRFQMode: () => void;
-  onFileUploaded: (file: { name: string; type: string; size: number; url: string }) => void;
+  onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string) => void;
   onDecision: (messageId: string, approved: boolean) => void;
   onImagenDecision: (rfqId: string, approved: boolean) => Promise<void>;
   onImagenRetry: (rfqId: string) => Promise<void>;
@@ -32,6 +32,8 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
   const [input, setInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ name: string; type: string; size: number; url: string } | null>(null);
+  const [pendingFileUploading, setPendingFileUploading] = useState(false);
   const dragCounter = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -66,10 +68,15 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
 
   async function handleSend() {
     const text = input.trim();
-    if (!text) return;
+    if (!text && !pendingFile) return;
     setInput('');
 
-    onSendMessage(text);
+    if (pendingFile) {
+      onFileUploaded(pendingFile, text || undefined);
+      setPendingFile(null);
+    } else {
+      onSendMessage(text);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -123,8 +130,11 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
       const file = files[i];
       const safeName = sanitizeFilename(file.name);
       const isImage = file.type.startsWith('image/');
+      const isDocument = /\.(docx?|xlsx?)$/i.test(file.name) || /word|spreadsheet|excel/i.test(file.type);
       const bucket = isImage ? 'product-images' : 'rfq-files';
       const path = `${stream.id}/${Date.now()}-${safeName}`;
+
+      if (isDocument) setPendingFileUploading(true);
 
       let url = '';
 
@@ -155,12 +165,15 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
         }
       }
 
-      onFileUploaded({
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        url: url || URL.createObjectURL(file),
-      });
+      const fileObj = { name: file.name, type: file.type, size: file.size, url: url || URL.createObjectURL(file) };
+
+      if (isDocument) {
+        // Queue as pending — user types intent before sending
+        setPendingFile(fileObj);
+        setPendingFileUploading(false);
+      } else {
+        onFileUploaded(fileObj);
+      }
     }
   }
 
@@ -359,6 +372,31 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
         className="hidden"
         onChange={(e) => { handleFilesSelected(e.target.files); e.target.value = ''; }}
       />
+
+      {/* Pending document chip */}
+      {(pendingFile || pendingFileUploading) && (
+        <div className="border-t border-brain-border bg-white px-4 pt-3 pb-1">
+          <div className="max-w-2xl mx-auto">
+            {pendingFileUploading ? (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                <span className="text-sm text-blue-700">Subiendo archivo...</span>
+              </div>
+            ) : pendingFile && (
+              <>
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+                  <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  <span className="text-sm text-blue-800 truncate flex-1">{pendingFile.name}</span>
+                  <button onClick={() => setPendingFile(null)} className="text-blue-400 hover:text-blue-600 transition-colors">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1 px-1">Escribe tu instrucción y presiona enviar — ej: "crea rfqs" o "verifica en el CRM"</p>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chatbox zone - switches between normal chat and RFQ module */}
       {rfqMode ? (
