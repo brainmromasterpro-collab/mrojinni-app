@@ -306,7 +306,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   const progressPercent = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
 
   return (
-    <div className="bg-[#1e1e1e] border border-[#333] rounded-xl overflow-hidden font-mono text-[12px]">
+    <div className="bg-[#1e1e1e] border border-[#333] rounded-xl overflow-hidden font-sans text-[12px]">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#2e2e2e] bg-[#252525]">

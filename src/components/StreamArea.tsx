@@ -1439,7 +1439,7 @@ function DocsProductsWidget({ message, onConfirm }: { message: Message; onConfir
   if (contenido.resolved) {
     return (
       <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 max-w-md">
-        <p className="text-[11px] text-[#555] font-mono">
+        <p className="text-[11px] text-[#555]">
           {contenido.count ? `${contenido.count} producto(s) enviados a búsqueda ✓` : 'Sin productos seleccionados'}
         </p>
       </div>
@@ -1473,7 +1473,7 @@ function DocsProductsWidget({ message, onConfirm }: { message: Message; onConfir
   }
 
   return (
-    <div className="rounded-xl border border-[#333] bg-[#1e1e1e] overflow-hidden font-mono text-[12px] max-w-lg">
+    <div className="rounded-xl border border-[#333] bg-[#1e1e1e] overflow-hidden font-sans text-[12px] max-w-lg">
       {contenido.imageUrl && (
         <div className="overflow-hidden border-b border-[#2a2a2a]">
           <img src={contenido.imageUrl} alt="Fuente" className="w-full max-h-32 object-cover object-top opacity-80" />
