@@ -1204,11 +1204,11 @@ export default function App() {
       setMessages((prev) => [...prev, extractingMsg]);
 
       try {
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-from-image`;
+        const apiUrl = `${'https://occlmazeyrxwszgjlrfb.supabase.co'}/functions/v1/extract-from-image`;
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2xtYXpleXJ4d3N6Z2pscmZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTQwODUsImV4cCI6MjA5MzA3MDA4NX0.FYWHw9xNCy5kQnelGOPB_zdAvYDd5B1nZEWN4CNP9DM'}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ image_url: imageUrl }),
@@ -1276,11 +1276,11 @@ export default function App() {
       setMessages((prev) => [...prev, extractingMsg]);
 
       try {
-        const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/extract-from-document`;
+        const apiUrl = `${'https://occlmazeyrxwszgjlrfb.supabase.co'}/functions/v1/extract-from-document`;
         const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Authorization': `Bearer ${'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9jY2xtYXpleXJ4d3N6Z2pscmZiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTQwODUsImV4cCI6MjA5MzA3MDA4NX0.FYWHw9xNCy5kQnelGOPB_zdAvYDd5B1nZEWN4CNP9DM'}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ file_url: file.url, file_type: file.name }),
