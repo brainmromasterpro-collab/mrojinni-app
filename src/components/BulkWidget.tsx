@@ -325,21 +325,35 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
         }
       </div>
 
-      {/* Product preview: image + info */}
+      {/* Product preview: two columns */}
       {rfqs.length > 0 && (() => {
         const imgSrc = rfqs[0].foto_url || rfqs[0].opciones?.find(o => o.imagen_url)?.imagen_url || null;
         return (
-          <div className="flex gap-3 px-4 py-3 border-b border-[#2a2a2a]">
-            <div className="flex-shrink-0 w-[120px] h-[120px] rounded-lg border border-[#333] bg-[#141414] flex items-center justify-center overflow-hidden">
+          <div className="flex gap-3 px-4 py-4 border-b border-[#2a2a2a]">
+            {/* Left box: image */}
+            <div className="flex-shrink-0 w-[120px] h-[120px] rounded-lg border border-[#3a3a3a] bg-[#161616] flex items-center justify-center overflow-hidden">
               {imgSrc
-                ? <img src={imgSrc} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
-                : <Package className="w-10 h-10 text-[#333]" />}
+                ? <img src={imgSrc} alt={rfqs[0].modelo} className="w-full h-full object-contain p-2" />
+                : <Package className="w-10 h-10 text-[#3a3a3a]" />}
             </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
-              <p className="text-[13px] font-semibold text-[#d4d4d4] font-sans truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
-              <p className="text-[11px] text-[#555] font-mono truncate">{rfqs[0].modelo}</p>
-              {rfqs[0].marca && <p className="text-[11px] text-[#555] font-sans">{rfqs[0].marca}</p>}
-              {rfqs.length > 1 && <p className="text-[10px] text-[#444]">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más</p>}
+            {/* Right box: info */}
+            <div className="flex-1 min-w-0 rounded-lg border border-[#3a3a3a] bg-[#161616] px-3 py-3 flex flex-col justify-center gap-2">
+              <p className="text-[13px] font-semibold text-[#e0e0e0] truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
+              <div className="space-y-1">
+                <p className="text-[11px] text-[#666]">
+                  <span className="text-[#444]">Parte</span>{' '}
+                  <span className="font-mono text-[#aaa]">{rfqs[0].modelo}</span>
+                </p>
+                {rfqs[0].marca && (
+                  <p className="text-[11px] text-[#666]">
+                    <span className="text-[#444]">Marca</span>{' '}
+                    <span className="text-[#aaa]">{rfqs[0].marca}</span>
+                  </p>
+                )}
+              </div>
+              {rfqs.length > 1 && (
+                <p className="text-[10px] text-[#444]">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más en este lote</p>
+              )}
             </div>
           </div>
         );
