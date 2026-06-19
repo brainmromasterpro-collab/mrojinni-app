@@ -829,6 +829,35 @@ export default function App() {
     }
   }, [activeStreamId]);
 
+  const lastSeenMensajeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeStreamId) return;
+    function applyAssistantRow(row: { id: string; stream_id: string; role: string; content: string; created_at: string }) {
+      if (row.role !== 'assistant') return;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === row.id)) return prev;
+        const withoutProcesando = prev.filter((m) => !(m.contenido as any)?.procesando);
+        return [...withoutProcesando, {
+          id: row.id,
+          stream_id: row.stream_id,
+          rol: 'assistant' as const,
+          tipo: 'text' as const,
+          contenido: { text: row.content },
+          created_at: row.created_at,
+        }];
+      });
+      lastSeenMensajeRef.current = row.id;
+    }
+    const channel = supabase.channel(`mensajes-${activeStreamId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `stream_id=eq.${activeStreamId}` }, (payload) => applyAssistantRow(payload.new as any))
+      .subscribe();
+    const poll = setInterval(async () => {
+      const { data } = await supabase.from('mensajes').select('*').eq('stream_id', activeStreamId).eq('role', 'assistant').order('created_at', { ascending: false }).limit(1);
+      if (data?.[0] && data[0].id !== lastSeenMensajeRef.current) applyAssistantRow(data[0]);
+    }, 3000);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+  }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleActiveBulkIdChange = useCallback(async (bulkId: string | null) => {
     if (bulkId === null) {
       setActiveBulkId(null);
