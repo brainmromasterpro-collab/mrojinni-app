@@ -325,6 +325,26 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
         }
       </div>
 
+      {/* Product preview: image + info */}
+      {rfqs.length > 0 && (() => {
+        const imgSrc = rfqs[0].foto_url || rfqs[0].opciones?.find(o => o.imagen_url)?.imagen_url || null;
+        return (
+          <div className="flex gap-3 px-4 py-3 border-b border-[#2a2a2a]">
+            <div className="flex-shrink-0 w-[120px] h-[120px] rounded-lg border border-[#333] bg-[#141414] flex items-center justify-center overflow-hidden">
+              {imgSrc
+                ? <img src={imgSrc} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
+                : <Package className="w-10 h-10 text-[#333]" />}
+            </div>
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
+              <p className="text-[13px] font-semibold text-[#d4d4d4] font-sans truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
+              <p className="text-[11px] text-[#555] font-mono truncate">{rfqs[0].modelo}</p>
+              {rfqs[0].marca && <p className="text-[11px] text-[#555] font-sans">{rfqs[0].marca}</p>}
+              {rfqs.length > 1 && <p className="text-[10px] text-[#444]">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más</p>}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Progress bar */}
       {!allFinished && (
         <div className="px-4 py-2 border-b border-[#2a2a2a]">
@@ -507,7 +527,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
               {isExpanded && status === 'image_ready' && (
                 <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-2.5 flex items-center gap-3 pl-8">
                   {rfq.foto_url && (
-                    <img src={rfq.foto_url} alt="" className="w-14 h-14 object-contain rounded border border-[#333] bg-[#111] p-1" />
+                    <img src={rfq.foto_url} alt="" className="w-[78px] h-[78px] object-contain rounded border border-[#333] bg-[#111] p-1" />
                   )}
                   <span className="text-[#888] text-[11px] flex-1 font-sans">
                     Imagen lista · {opciones.find(o => o.id === rfq.opcion_seleccionada)?.proveedor || opciones[0]?.proveedor || '—'}
