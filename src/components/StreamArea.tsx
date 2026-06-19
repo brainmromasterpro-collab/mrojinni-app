@@ -1438,9 +1438,9 @@ function DocsProductsWidget({ message, onConfirm }: { message: Message; onConfir
 
   if (contenido.resolved) {
     return (
-      <div className="rounded-xl border border-brain-border bg-brain-surface p-3 max-w-md">
-        <p className="text-xs text-gray-500 text-center">
-          {contenido.count ? `${contenido.count} producto(s) enviados a busqueda` : 'Sin productos seleccionados'} &#x2713;
+      <div className="rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 max-w-md">
+        <p className="text-[11px] text-[#555] font-mono">
+          {contenido.count ? `${contenido.count} producto(s) enviados a búsqueda ✓` : 'Sin productos seleccionados'}
         </p>
       </div>
     );
@@ -1473,85 +1473,87 @@ function DocsProductsWidget({ message, onConfirm }: { message: Message; onConfir
   }
 
   return (
-    <div className="rounded-xl border border-brain-border bg-white p-4 space-y-3 max-w-lg">
+    <div className="rounded-xl border border-[#333] bg-[#1e1e1e] overflow-hidden font-mono text-[12px] max-w-lg">
       {contenido.imageUrl && (
-        <div className="rounded-lg overflow-hidden border border-brain-border bg-brain-surface">
-          <img
-            src={contenido.imageUrl}
-            alt="Fuente"
-            className="w-full max-h-36 object-cover object-top"
-          />
+        <div className="overflow-hidden border-b border-[#2a2a2a]">
+          <img src={contenido.imageUrl} alt="Fuente" className="w-full max-h-32 object-cover object-top opacity-80" />
         </div>
       )}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-sm font-semibold text-brain-text">
-          <FileText className="w-4 h-4" />
-          <span>Productos extraidos</span>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 bg-[#252525] border-b border-[#2e2e2e]">
+        <div className="flex items-center gap-2">
+          <FileText className="w-3.5 h-3.5 text-[#555]" />
+          <span className="text-[#ccc] font-sans font-semibold text-[12px]">Productos extraídos</span>
         </div>
-        <span className="text-[10px] text-[#888] bg-brain-surface px-2 py-0.5 rounded-full">
-          {contenido.source}
-        </span>
+        <span className="text-[10px] text-[#555]">{contenido.source}</span>
       </div>
 
-      <div className="border border-brain-border rounded-lg overflow-hidden">
-        <div className="flex items-center gap-2 px-3 py-2 bg-brain-surface border-b border-brain-border">
-          <button onClick={toggleAll} className="w-4 h-4 rounded border border-gray-300 flex items-center justify-center hover:border-gray-400 transition-colors">
-            {selected.size === products.length && <Check className="w-3 h-3 text-[#3B82F6]" />}
-          </button>
-          <span className="text-[10px] font-medium text-[#888] uppercase flex-1">Marca</span>
-          <span className="text-[10px] font-medium text-[#888] uppercase w-32">Modelo / Parte</span>
-          <span className="text-[10px] font-medium text-[#888] uppercase w-12 text-right">Qty</span>
-        </div>
+      {/* Column headers */}
+      <div className="grid grid-cols-[16px_1fr_120px_40px] gap-2 px-3 py-1.5 border-b border-[#2a2a2a] bg-[#222]">
+        <button onClick={toggleAll} className="w-3.5 h-3.5 rounded border border-[#444] flex items-center justify-center hover:border-[#666] transition-colors mt-0.5">
+          {selected.size === products.length && selected.size > 0 && <Check className="w-2.5 h-2.5 text-[#60a5fa]" />}
+        </button>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider">Marca</span>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider">Modelo / Parte</span>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider text-right">Qty</span>
+      </div>
 
-        <div className="max-h-48 overflow-y-auto">
-          {products.map((p, i) => (
-            <div
-              key={i}
-              className={`flex items-center gap-2 px-3 py-2 border-b border-brain-border last:border-b-0 transition-colors ${
-                selected.has(i) ? 'bg-white' : 'bg-gray-50 opacity-60'
+      {/* Rows */}
+      <div className="max-h-48 overflow-y-auto divide-y divide-[#252525]">
+        {products.map((p, i) => (
+          <div
+            key={i}
+            className={`grid grid-cols-[16px_1fr_120px_40px] gap-2 px-3 py-1.5 transition-colors ${
+              selected.has(i) ? 'bg-[#1e1e1e]' : 'bg-[#1a1a1a] opacity-50'
+            }`}
+          >
+            <button
+              onClick={() => toggleSelect(i)}
+              className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 mt-0.5 transition-colors ${
+                selected.has(i) ? 'border-[#60a5fa] bg-[#60a5fa]' : 'border-[#444]'
               }`}
             >
-              <button onClick={() => toggleSelect(i)} className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${selected.has(i) ? 'border-[#3B82F6] bg-[#3B82F6]' : 'border-gray-300'}`}>
-                {selected.has(i) && <Check className="w-3 h-3 text-white" />}
-              </button>
-              <input
-                value={p.marca}
-                onChange={(e) => updateProduct(i, 'marca', e.target.value)}
-                className="flex-1 text-[11px] bg-transparent border-b border-transparent hover:border-brain-border focus:border-brain-accent focus:outline-none px-1 py-0.5 min-w-0"
-              />
-              <input
-                value={p.modelo}
-                onChange={(e) => updateProduct(i, 'modelo', e.target.value)}
-                className="w-32 text-[11px] bg-transparent border-b border-transparent hover:border-brain-border focus:border-brain-accent focus:outline-none px-1 py-0.5 font-mono"
-              />
-              <input
-                value={String(p.qty)}
-                onChange={(e) => updateProduct(i, 'qty', e.target.value)}
-                type="number"
-                min="1"
-                className="w-12 text-[11px] text-right bg-transparent border-b border-transparent hover:border-brain-border focus:border-brain-accent focus:outline-none px-1 py-0.5"
-              />
-            </div>
-          ))}
-        </div>
+              {selected.has(i) && <Check className="w-2.5 h-2.5 text-[#0a0a0a]" />}
+            </button>
+            <input
+              value={p.marca}
+              onChange={(e) => updateProduct(i, 'marca', e.target.value)}
+              className="text-[11px] text-[#d4d4d4] bg-transparent border-b border-transparent hover:border-[#333] focus:border-[#60a5fa] focus:outline-none px-0.5 py-0 font-sans min-w-0"
+            />
+            <input
+              value={p.modelo}
+              onChange={(e) => updateProduct(i, 'modelo', e.target.value)}
+              className="text-[11px] text-[#d4d4d4] bg-transparent border-b border-transparent hover:border-[#333] focus:border-[#60a5fa] focus:outline-none px-0.5 py-0 font-mono"
+            />
+            <input
+              value={String(p.qty)}
+              onChange={(e) => updateProduct(i, 'qty', e.target.value)}
+              type="number"
+              min="1"
+              className="text-[11px] text-[#d4d4d4] text-right bg-transparent border-b border-transparent hover:border-[#333] focus:border-[#60a5fa] focus:outline-none px-0.5 py-0"
+            />
+          </div>
+        ))}
       </div>
 
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-[#888]">{selected.size} de {products.length} seleccionados</span>
-        <div className="flex gap-2">
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+        <span className="text-[11px] text-[#555] font-sans">{selected.size} de {products.length} seleccionados</span>
+        <div className="flex items-center gap-4">
           <button
             onClick={() => onConfirm(message.id, [])}
-            className="px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-600 text-[11px] font-medium hover:bg-gray-100 transition-colors"
+            className="text-[11px] text-[#555] hover:text-[#888] font-sans transition-colors"
           >
             Cancelar
           </button>
           <button
             onClick={handleConfirm}
             disabled={selected.size === 0}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 text-[11px] font-medium hover:bg-sky-100 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-1 text-[11px] text-[#60a5fa] hover:text-[#93c5fd] disabled:opacity-30 font-sans transition-colors"
           >
             <Search className="w-3 h-3" />
-            Buscar {selected.size > 1 ? `(${selected.size})` : ''}
+            Buscar{selected.size > 1 ? ` (${selected.size})` : ''} →
           </button>
         </div>
       </div>

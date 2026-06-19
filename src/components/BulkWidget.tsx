@@ -45,17 +45,17 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   return 'searching';
 }
 
-function getStatusBadge(status: RowStatus): { label: string; classes: string } {
+function getStatusCell(status: RowStatus): { icon: string; label: string; color: string } {
   switch (status) {
-    case 'searching': return { label: 'Buscando...', classes: 'bg-sky-50 text-sky-600' };
-    case 'no_results': return { label: 'Sin resultados', classes: 'bg-gray-100 text-gray-500' };
-    case 'has_options': return { label: 'Listo', classes: 'bg-emerald-50 text-emerald-600' };
-    case 'processing_image': return { label: 'Imagen...', classes: 'bg-amber-50 text-amber-600' };
-    case 'image_pending': return { label: 'Imagen fallida', classes: 'bg-amber-50 text-amber-700' };
-    case 'image_ready': return { label: 'Foto lista', classes: 'bg-teal-50 text-teal-600' };
-    case 'publishing': return { label: 'Publicando...', classes: 'bg-sky-50 text-sky-600' };
-    case 'published': return { label: 'Publicado', classes: 'bg-emerald-50 text-emerald-700' };
-    case 'publish_failed': return { label: 'Error al publicar', classes: 'bg-red-50 text-red-600' };
+    case 'searching':        return { icon: '⏳', label: 'Buscando...',      color: 'text-[#888]' };
+    case 'no_results':       return { icon: '—',  label: 'Sin resultados',   color: 'text-[#666]' };
+    case 'has_options':      return { icon: '◉',  label: 'Listo',            color: 'text-[#4ade80]' };
+    case 'processing_image': return { icon: '⏳', label: 'Buscando imagen',  color: 'text-[#888]' };
+    case 'image_pending':    return { icon: '⚠',  label: 'Imagen fallida',   color: 'text-[#fb923c]' };
+    case 'image_ready':      return { icon: '🖼',  label: 'Foto lista',       color: 'text-[#4ade80]' };
+    case 'publishing':       return { icon: '⏳', label: 'Publicando...',    color: 'text-[#888]' };
+    case 'published':        return { icon: '✅', label: 'Publicado',        color: 'text-[#4ade80]' };
+    case 'publish_failed':   return { icon: '❌', label: 'Error al publicar', color: 'text-[#f87171]' };
   }
 }
 
@@ -287,18 +287,18 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
   if (loading) {
     return (
-      <div className="bg-white border border-brain-border rounded-xl p-6 flex items-center justify-center gap-2">
-        <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
-        <span className="text-[12px] text-[#888]">Cargando resultados del lote...</span>
+      <div className="bg-[#1e1e1e] border border-[#333] rounded-xl p-6 flex items-center justify-center gap-2">
+        <Loader2 className="w-4 h-4 text-[#60a5fa] animate-spin" />
+        <span className="text-[12px] text-[#888]">Cargando lote...</span>
       </div>
     );
   }
 
   if (rfqs.length === 0) {
     return (
-      <div className="bg-white border border-brain-border rounded-xl p-6 flex items-center justify-center">
-        <span className="text-[12px] text-[#888]">Procesando lote...</span>
-        <Loader2 className="w-3.5 h-3.5 text-sky-400 animate-spin ml-2" />
+      <div className="bg-[#1e1e1e] border border-[#333] rounded-xl p-6 flex items-center justify-center gap-2">
+        <Loader2 className="w-3.5 h-3.5 text-[#555] animate-spin" />
+        <span className="text-[12px] text-[#666]">Procesando lote...</span>
       </div>
     );
   }
@@ -306,301 +306,219 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   const progressPercent = stats.total > 0 ? (stats.completed / stats.total) * 100 : 0;
 
   return (
-    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-brain-border bg-brain-surface/50">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-sky-100 flex items-center justify-center">
-            <Package className="w-3.5 h-3.5 text-sky-600" />
-          </div>
-          <div>
-            <h3 className="text-[13px] font-semibold text-gray-900">Lote de busqueda</h3>
-            <p className="text-[10px] text-[#888]">
-              {stats.total} producto{stats.total !== 1 ? 's' : ''}
-              {stats.published > 0 && ` · ${stats.published} publicado${stats.published !== 1 ? 's' : ''}`}
-              {stats.searching > 0 && ` · ${stats.searching} buscando`}
-            </p>
-          </div>
-        </div>
-        {!allFinished && stats.searching > 0 && (
-          <Loader2 className="w-3.5 h-3.5 text-sky-400 animate-spin" />
-        )}
-        {allFinished && (
-          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-        )}
-      </div>
+    <div className="bg-[#1e1e1e] border border-[#333] rounded-xl overflow-hidden font-mono text-[12px]">
 
-      {/* Product preview: image left, info right */}
-      {rfqs.length > 0 && (
-        <div className="flex gap-3 px-4 py-3 border-b border-brain-border bg-white">
-          <div className="flex-shrink-0 w-[108px] h-[108px] rounded-lg border border-brain-border bg-brain-surface flex items-center justify-center overflow-hidden">
-            {(() => {
-              const imgSrc = rfqs[0].foto_url
-                || rfqs[0].opciones?.find(o => o.imagen_url)?.imagen_url
-                || null;
-              return imgSrc
-                ? <img src={imgSrc} alt={rfqs[0].modelo} className="w-full h-full object-contain p-1" />
-                : <Package className="w-9 h-9 text-brain-border" />;
-            })()}
-          </div>
-          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
-            <p className="text-[13px] font-semibold text-gray-900 truncate">{rfqs[0].marca} {rfqs[0].modelo}</p>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] text-[#aaa]">Parte <span className="font-mono text-gray-700">{rfqs[0].modelo}</span></span>
-              {rfqs[0].marca && <span className="text-[10px] text-[#aaa]">Marca <span className="text-gray-700">{rfqs[0].marca}</span></span>}
-            </div>
-            {rfqs.length > 1 && <p className="text-[10px] text-[#aaa]">+{rfqs.length - 1} producto{rfqs.length - 1 !== 1 ? 's' : ''} más</p>}
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#2e2e2e] bg-[#252525]">
+        <div className="flex items-center gap-2">
+          <Package className="w-3.5 h-3.5 text-[#555]" />
+          <span className="text-[#ccc] font-sans font-semibold text-[12px]">Lote de búsqueda</span>
+          <span className="text-[#555] text-[11px]">·</span>
+          <span className="text-[#666] text-[11px]">
+            {stats.total} productos
+            {stats.published > 0 && ` · ${stats.published} publicados`}
+          </span>
         </div>
-      )}
+        {!allFinished && stats.searching > 0
+          ? <Loader2 className="w-3 h-3 text-[#555] animate-spin" />
+          : allFinished && <span className="text-[11px] text-[#4ade80]">✓ Completo</span>
+        }
+      </div>
 
       {/* Progress bar */}
-      <div className="px-4 py-2 border-b border-brain-border">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gradient-to-r from-sky-400 to-emerald-400 rounded-full transition-all duration-500"
-              style={{ width: `${progressPercent}%` }}
-            />
+      {!allFinished && (
+        <div className="px-4 py-2 border-b border-[#2a2a2a]">
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-[3px] bg-[#2a2a2a] rounded-full overflow-hidden">
+              <div
+                className="h-full bg-[#3b82f6] rounded-full transition-all duration-500"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-[#555] tabular-nums">{stats.completed}/{stats.total}</span>
           </div>
-          <span className="text-[10px] font-medium text-[#888] whitespace-nowrap">
-            {stats.completed}/{stats.total}
-          </span>
-        </div>
-      </div>
-
-      {/* Toolbar - shown when there are actionable items */}
-      {(stats.withOptions > 0 || stats.imageReady > 0) && (
-        <div className="flex items-center justify-between px-4 py-2 border-b border-brain-border flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            {stats.withOptions > 0 && (
-              <>
-                <button
-                  onClick={selectAllBest}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-brain-border text-[10px] font-medium text-gray-700 hover:bg-brain-surface transition-colors"
-                >
-                  <Zap className="w-3 h-3" />
-                  Mejor opcion ({stats.withOptions})
-                </button>
-                {selected.size > 0 && (
-                  <button
-                    onClick={deselectAll}
-                    className="px-2.5 py-1 rounded-md text-[10px] font-medium text-[#888] hover:text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Limpiar
-                  </button>
-                )}
-              </>
-            )}
-            {stats.imageReady > 0 && (
-              <button
-                onClick={handlePublishCRMBulk}
-                disabled={actionInProgress}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
-              >
-                <Send className="w-3 h-3" />
-                Publicar en CRM ({stats.imageReady})
-              </button>
-            )}
-          </div>
-          <span className="text-[10px] text-[#888]">
-            {selected.size > 0 ? `${selected.size} seleccionado${selected.size !== 1 ? 's' : ''}` : ''}
-          </span>
         </div>
       )}
 
-      {/* RFQ list */}
-      <div className="max-h-[400px] overflow-y-auto divide-y divide-brain-border">
+      {/* Toolbar */}
+      {(stats.withOptions > 0 || stats.imageReady > 0) && (
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-[#2a2a2a] bg-[#222]">
+          {stats.withOptions > 0 && (
+            <button
+              onClick={selectAllBest}
+              className="flex items-center gap-1 text-[11px] text-[#60a5fa] hover:text-[#93c5fd] transition-colors"
+            >
+              <Zap className="w-3 h-3" />
+              Seleccionar mejor opción ({stats.withOptions})
+            </button>
+          )}
+          {selected.size > 0 && (
+            <button onClick={deselectAll} className="text-[11px] text-[#555] hover:text-[#888] transition-colors">
+              Limpiar
+            </button>
+          )}
+          {stats.imageReady > 0 && (
+            <button
+              onClick={handlePublishCRMBulk}
+              disabled={actionInProgress}
+              className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors ml-auto"
+            >
+              <Send className="w-3 h-3" />
+              Publicar en CRM ({stats.imageReady})
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Table header */}
+      <div className="grid grid-cols-[1fr_140px_100px_80px] gap-0 border-b border-[#2e2e2e] bg-[#252525] px-4 py-2">
+        <span className="text-[10px] text-[#555] uppercase tracking-wider">Modelo</span>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider">Estado</span>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider">Precio</span>
+        <span className="text-[10px] text-[#555] uppercase tracking-wider text-right">Link</span>
+      </div>
+
+      {/* RFQ rows */}
+      <div className="max-h-[360px] overflow-y-auto divide-y divide-[#252525]">
         {rfqs.map((rfq) => {
           const status = getRowStatus(rfq);
           const isExpanded = expandedRow === rfq.id;
           const selectedOpcion = selected.get(rfq.id);
           const opciones = [...(rfq.opciones || [])].sort((a, b) => (b.score_ranking || 0) - (a.score_ranking || 0));
           const bestOption = opciones[0];
-          const badge = getStatusBadge(status);
-          const isTerminal = status === 'published' || status === 'no_results' || status === 'publish_failed';
+          const statusCell = getStatusCell(status);
           const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending';
           const selectedOpData = opciones.find(o => o.id === selectedOpcion);
+          const isTerminal = status === 'published' || status === 'no_results' || status === 'publish_failed';
 
           return (
-            <div key={rfq.id} className={isTerminal ? 'opacity-60' : ''}>
-              {/* Row header */}
+            <div key={rfq.id} className={isTerminal ? 'opacity-50' : ''}>
               <button
-                onClick={() => {
-                  if (!canExpand) return;
-                  setExpandedRow(isExpanded ? null : rfq.id);
-                }}
+                onClick={() => { if (canExpand) setExpandedRow(isExpanded ? null : rfq.id); }}
                 disabled={!canExpand}
-                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left transition-colors ${
-                  canExpand ? 'hover:bg-brain-surface/60 cursor-pointer' : 'cursor-default'
-                } ${isExpanded ? 'bg-brain-surface/40' : ''}`}
+                className={`w-full grid grid-cols-[1fr_140px_100px_80px] gap-0 px-4 py-2.5 text-left transition-colors ${
+                  canExpand ? 'hover:bg-[#252525] cursor-pointer' : 'cursor-default'
+                } ${isExpanded ? 'bg-[#252525]' : ''}`}
               >
-                <div className="flex-shrink-0 w-4 flex items-center justify-center">
-                  {canExpand ? (
-                    <ChevronRight className={`w-3 h-3 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
-                  ) : (
-                    getStatusIcon(status)
+                {/* Modelo */}
+                <div className="flex items-center gap-1.5 min-w-0 pr-3">
+                  {canExpand && (
+                    <ChevronRight className={`w-3 h-3 text-[#444] flex-shrink-0 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`} />
                   )}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <span className="text-[11px] font-medium text-gray-900 truncate block">
-                    {rfq.marca} {rfq.modelo}
+                  <span className="text-[#d4d4d4] truncate font-mono text-[11px]">
+                    {rfq.modelo}
+                    {rfq.marca && <span className="text-[#666] ml-1 font-sans">· {rfq.marca}</span>}
                   </span>
                 </div>
 
-                <span className={`flex-shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold ${badge.classes}`}>
-                  {badge.label}
-                </span>
+                {/* Estado */}
+                <div className={`flex items-center gap-1 ${statusCell.color}`}>
+                  {status === 'searching' || status === 'processing_image' || status === 'publishing'
+                    ? <Loader2 className="w-3 h-3 animate-spin text-[#555]" />
+                    : <span>{statusCell.icon}</span>
+                  }
+                  <span className="text-[11px] font-sans">{statusCell.label}</span>
+                </div>
 
-                {status === 'published' && rfq.crm_url && (
-                  <a
-                    href={rfq.crm_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft hover:bg-brain-accent hover:text-white transition-colors"
-                  >
-                    Ver en CRM ↗
-                  </a>
-                )}
-
-                <div className="flex-shrink-0 w-28 text-right">
-                  {status === 'searching' && (
-                    <Loader2 className="w-3 h-3 text-sky-400 animate-spin ml-auto" />
-                  )}
-                  {status === 'has_options' && !selectedOpData && bestOption && (
-                    <span className="text-[10px] font-semibold text-gray-800">
-                      ${bestOption.precio_orig} {bestOption.moneda || 'USD'}
-                    </span>
+                {/* Precio */}
+                <div className="flex items-center">
+                  {status === 'has_options' && !selectedOpData && bestOption?.precio_orig != null && (
+                    <span className="text-[#d4d4d4] text-[11px]">${bestOption.precio_orig} <span className="text-[#555]">{bestOption.moneda || 'USD'}</span></span>
                   )}
                   {status === 'has_options' && selectedOpData && (
-                    <span className="text-[10px] font-medium text-emerald-700 truncate block">
-                      {selectedOpData.proveedor}
-                    </span>
+                    <span className="text-[#60a5fa] text-[11px] truncate">{selectedOpData.proveedor}</span>
                   )}
-                  {status === 'image_ready' && rfq.foto_url && (
-                    <span className="text-[10px] font-medium text-teal-600">Foto lista</span>
+                  {(status === 'searching' || isTerminal) && (
+                    <span className="text-[#444]">—</span>
+                  )}
+                </div>
+
+                {/* Link */}
+                <div className="flex items-center justify-end">
+                  {status === 'published' && rfq.crm_url ? (
+                    <a
+                      href={rfq.crm_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[#60a5fa] hover:text-[#93c5fd] text-[11px] font-sans transition-colors"
+                    >
+                      Ver CRM ↗
+                    </a>
+                  ) : (
+                    <span className="text-[#444]">—</span>
                   )}
                 </div>
               </button>
 
-              {/* Expanded content */}
+              {/* Expanded: provider selection */}
               {isExpanded && status === 'has_options' && (
-                <div className="bg-brain-surface/30 border-t border-brain-border">
-                  <div className="px-4 py-2 pl-10">
-                    <div className="space-y-1">
-                      {opciones.map((op) => {
-                        const isSelected = selectedOpcion === op.id;
-                        return (
-                          <div
-                            key={op.id}
-                            onClick={() => selectOpcion(rfq.id, op.id)}
-                            className={`flex items-center py-2 px-2.5 rounded-lg cursor-pointer transition-all duration-150 border ${
-                              isSelected
-                                ? 'bg-sky-50 border-sky-200 shadow-sm'
-                                : 'border-transparent hover:bg-white hover:border-brain-border'
-                            }`}
-                          >
-                            <div className={`w-3 h-3 rounded-full border-2 mr-2 flex items-center justify-center flex-shrink-0 ${
-                              isSelected ? 'border-sky-500' : 'border-gray-300'
-                            }`}>
-                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-sky-500" />}
-                            </div>
-
-                            <span className={`flex-1 text-[10px] ${isSelected ? 'font-semibold text-gray-900' : 'text-gray-700'} truncate`}>
-                              {op.proveedor || 'Sin nombre'}
-                            </span>
-                            <span className="w-20 text-right text-[10px] font-semibold text-gray-900">
-                              {op.precio_orig != null ? `$${op.precio_orig}` : '--'}
-                            </span>
-                            <span className="w-16 text-right text-[9px] text-emerald-600 truncate">
-                              {op.disponibilidad || 'N/A'}
-                            </span>
-                            <div className="w-16 flex justify-end">
-                              {isSelected && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handlePublishIndividual(rfq.id, op.id);
-                                  }}
-                                  disabled={publishingIndividual === rfq.id}
-                                  className="px-2 py-0.5 rounded text-[9px] font-semibold text-white bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-50 transition-colors"
-                                >
-                                  {publishingIndividual === rfq.id ? (
-                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                  ) : (
-                                    'Aprobar'
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-2">
+                  <div className="space-y-0.5 pl-4">
+                    {opciones.map((op) => {
+                      const isSelected = selectedOpcion === op.id;
+                      return (
+                        <div
+                          key={op.id}
+                          onClick={() => selectOpcion(rfq.id, op.id)}
+                          className={`flex items-center gap-3 py-1.5 px-2 rounded cursor-pointer transition-colors ${
+                            isSelected ? 'bg-[#1e3a5f]' : 'hover:bg-[#252525]'
+                          }`}
+                        >
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isSelected ? 'bg-[#60a5fa]' : 'bg-[#333]'}`} />
+                          <span className={`flex-1 text-[11px] truncate ${isSelected ? 'text-[#d4d4d4]' : 'text-[#888]'}`}>
+                            {op.proveedor || 'Sin nombre'}
+                          </span>
+                          <span className="text-[11px] text-[#d4d4d4] tabular-nums">
+                            {op.precio_orig != null ? `$${op.precio_orig}` : '—'}
+                          </span>
+                          <span className="text-[10px] text-[#555] w-16 text-right">{op.disponibilidad || ''}</span>
+                          {isSelected && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handlePublishIndividual(rfq.id, op.id); }}
+                              disabled={publishingIndividual === rfq.id}
+                              className="text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors ml-1"
+                            >
+                              {publishingIndividual === rfq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Aprobar →'}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* Expanded: image pending (failed) */}
+              {/* Expanded: image pending */}
               {isExpanded && status === 'image_pending' && (
-                <div className="bg-amber-50/50 border-t border-brain-border">
-                  <div className="px-4 py-3 pl-10 flex items-center gap-3">
-                    <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-medium text-amber-800">No se pudo obtener la imagen automaticamente.</p>
-                      <p className="text-[10px] text-amber-600 mt-0.5">Puedes reintentar la busqueda de imagen para este producto.</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRetryImage(rfq.id);
-                      }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 hover:bg-amber-200 transition-colors"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Reintentar
-                    </button>
-                  </div>
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-2.5 flex items-center gap-3 pl-8">
+                  <span className="text-[#fb923c] text-[11px] flex-1 font-sans">No se pudo obtener imagen automáticamente.</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRetryImage(rfq.id); }}
+                    className="flex items-center gap-1 text-[11px] text-[#888] hover:text-[#ccc] transition-colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reintentar
+                  </button>
                 </div>
               )}
 
               {/* Expanded: image ready */}
               {isExpanded && status === 'image_ready' && (
-                <div className="bg-brain-surface/30 border-t border-brain-border">
-                  <div className="px-4 py-3 pl-10 flex items-center gap-3">
-                    {rfq.foto_url && (
-                      <img
-                        src={rfq.foto_url}
-                        alt={`${rfq.marca} ${rfq.modelo}`}
-                        className="w-20 h-20 object-contain rounded-lg border border-brain-border bg-white p-1"
-                      />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] text-gray-700">Imagen procesada y lista para publicar en CRM.</p>
-                      <p className="text-[10px] text-[#888] mt-0.5">
-                        Proveedor: {opciones.find(o => o.id === rfq.opcion_seleccionada)?.proveedor || opciones[0]?.proveedor || '--'}
-                      </p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePublishCRMIndividual(rfq.id);
-                      }}
-                      disabled={publishingIndividual === rfq.id}
-                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold text-white bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 transition-colors"
-                    >
-                      {publishingIndividual === rfq.id ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <>
-                          <Send className="w-3 h-3" />
-                          Publicar
-                        </>
-                      )}
-                    </button>
-                  </div>
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-2.5 flex items-center gap-3 pl-8">
+                  {rfq.foto_url && (
+                    <img src={rfq.foto_url} alt="" className="w-14 h-14 object-contain rounded border border-[#333] bg-[#111] p-1" />
+                  )}
+                  <span className="text-[#888] text-[11px] flex-1 font-sans">
+                    Imagen lista · {opciones.find(o => o.id === rfq.opcion_seleccionada)?.proveedor || opciones[0]?.proveedor || '—'}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePublishCRMIndividual(rfq.id); }}
+                    disabled={publishingIndividual === rfq.id}
+                    className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors"
+                  >
+                    {publishingIndividual === rfq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Send className="w-3 h-3" /> Publicar</>}
+                  </button>
                 </div>
               )}
             </div>
@@ -608,19 +526,19 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
         })}
       </div>
 
-      {/* Footer with bulk action */}
+      {/* Footer bulk action */}
       {selected.size > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-brain-border bg-brain-surface/50">
-          <span className="text-[10px] text-[#888]">
-            {selected.size} seleccionado{selected.size !== 1 ? 's' : ''} — se procesara imagen y publicara en CRM
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+          <span className="text-[11px] text-[#555] font-sans">
+            {selected.size} seleccionado{selected.size !== 1 ? 's' : ''} — imagen + publicar en CRM
           </span>
           <button
             onClick={handlePublishBulk}
             disabled={actionInProgress}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#3B82F6] text-white text-[11px] font-semibold hover:bg-[#2563EB] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-1.5 text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors"
           >
             {actionInProgress && <Loader2 className="w-3 h-3 animate-spin" />}
-            Aprobar y publicar ({selected.size})
+            Aprobar y publicar ({selected.size}) →
           </button>
         </div>
       )}
