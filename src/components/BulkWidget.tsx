@@ -27,7 +27,7 @@ interface RFQRow {
   opciones: Opcion[];
 }
 
-type RowStatus = 'searching' | 'no_results' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published';
+type RowStatus = 'searching' | 'no_results' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
 
 function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'publicado') return 'published';
@@ -35,7 +35,7 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'foto_lista') return 'image_ready';
   if (rfq.estado === 'procesando_imagen') return 'processing_image';
   if (rfq.estado === 'foto_pendiente') return 'image_pending';
-  if (rfq.estado === 'publicacion_fallida') return 'no_results';
+  if (rfq.estado === 'publicacion_fallida') return 'publish_failed';
   if (rfq.estado === 'imagen_fallida') return 'image_pending';
   const searchingStates = ['recibido', 'buscando'];
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
@@ -55,6 +55,7 @@ function getStatusBadge(status: RowStatus): { label: string; classes: string } {
     case 'image_ready': return { label: 'Foto lista', classes: 'bg-teal-50 text-teal-600' };
     case 'publishing': return { label: 'Publicando...', classes: 'bg-sky-50 text-sky-600' };
     case 'published': return { label: 'Publicado', classes: 'bg-emerald-50 text-emerald-700' };
+    case 'publish_failed': return { label: 'Error al publicar', classes: 'bg-red-50 text-red-600' };
   }
 }
 
@@ -280,6 +281,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       case 'image_ready': return <ImageIcon className="w-3.5 h-3.5 text-teal-500" />;
       case 'publishing': return <Loader2 className="w-3.5 h-3.5 text-sky-500 animate-spin" />;
       case 'published': return <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />;
+      case 'publish_failed': return <AlertCircle className="w-3.5 h-3.5 text-red-500" />;
     }
   }
 
@@ -416,7 +418,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
           const opciones = [...(rfq.opciones || [])].sort((a, b) => (b.score_ranking || 0) - (a.score_ranking || 0));
           const bestOption = opciones[0];
           const badge = getStatusBadge(status);
-          const isTerminal = status === 'published' || status === 'no_results';
+          const isTerminal = status === 'published' || status === 'no_results' || status === 'publish_failed';
           const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending';
           const selectedOpData = opciones.find(o => o.id === selectedOpcion);
 
