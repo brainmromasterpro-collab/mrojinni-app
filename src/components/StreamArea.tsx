@@ -2,19 +2,15 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Paperclip, Mic, Image as ImageIcon, Search, PackageCheck, Radio, UserCheck, Keyboard, X, RotateCcw, Square, Upload, FileText, Check } from 'lucide-react';
 import type { Message, Stream } from '../lib/types';
 import FileUploadCard from './FileUploadCard';
-import RFQChatModule from './RFQChatModule';
 import BulkWidget from './BulkWidget';
 import { supabase } from '../lib/supabase';
 
 interface StreamAreaProps {
   stream: Stream | null;
   messages: Message[];
-  rfqMode: boolean;
   bulkRfqIds: Set<string>;
   onActiveBulkIdChange: (id: string | null) => void;
   onSendMessage: (text: string) => void;
-  onRFQSubmitted: (rfqId: string, uuid: string, summary: { marca: string; modelo: string; qty: number; attachmentCount: number }) => void;
-  onCloseRFQMode: () => void;
   onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string) => void;
   onDecision: (messageId: string, approved: boolean) => void;
   onImagenDecision: (rfqId: string, approved: boolean) => Promise<void>;
@@ -28,7 +24,7 @@ interface StreamAreaProps {
 const FILE_ACCEPT = '.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,.ogg';
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
-export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onRFQSubmitted, onCloseRFQMode, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar }: StreamAreaProps) {
+export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar }: StreamAreaProps) {
   const [input, setInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
@@ -398,25 +394,17 @@ export default function StreamArea({ stream, messages, rfqMode, bulkRfqIds, onAc
         </div>
       )}
 
-      {/* Chatbox zone - switches between normal chat and RFQ module */}
-      {rfqMode ? (
-        <RFQChatModule
-          streamId={stream.id}
-          onSubmitted={onRFQSubmitted}
-          onClose={onCloseRFQMode}
-        />
-      ) : (
-        <MobileVoiceInput
-          input={input}
-          setInput={setInput}
-          onSend={handleSend}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onFileClick={() => fileInputRef.current?.click()}
-          onImageClick={() => imageInputRef.current?.click()}
-          onAudioReady={(blob) => handleAudioUpload(blob)}
-        />
-      )}
+      {/* Chatbox */}
+      <MobileVoiceInput
+        input={input}
+        setInput={setInput}
+        onSend={handleSend}
+        onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
+        onFileClick={() => fileInputRef.current?.click()}
+        onImageClick={() => imageInputRef.current?.click()}
+        onAudioReady={(blob) => handleAudioUpload(blob)}
+      />
 
     </div>
   );

@@ -1,4 +1,4 @@
-import { FileText, Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3 } from 'lucide-react';
+import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3 } from 'lucide-react';
 
 interface SidebarProps {
   activeNav: string;
@@ -45,7 +45,6 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
 
       {/* Use case */}
       <NavSection title="Use case - MRO">
-        <NavItem icon={FileText} label="New RFQ" id="new-rfq" active={activeNav === 'new-rfq'} onClick={onNavSelect} />
         <NavItem icon={Package} label="Ordenes" id="ordenes" active={activeNav === 'ordenes'} onClick={onNavSelect} />
         <NavItem icon={FolderOpen} label="Catalogo" id="catalogo" active={activeNav === 'catalogo'} onClick={onNavSelect} />
       </NavSection>
