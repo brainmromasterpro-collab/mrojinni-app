@@ -145,6 +145,17 @@ const AGENTE_LABEL: Record<string, string> = {
   monitor: 'Monitor',
 };
 
+function formatError(err: unknown): string | null {
+  if (err == null) return null;
+  if (typeof err === 'string') return err;
+  if (typeof err === 'object') {
+    const o = err as Record<string, unknown>;
+    if (typeof o.message === 'string') return o.message;
+    try { return JSON.stringify(err); } catch { return String(err); }
+  }
+  return String(err);
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -162,7 +173,9 @@ export default function DashboardPanel() {
   const [rfqsMes, setRfqsMes] = useState<number | null>(null);
   const [rfqsSemana, setRfqsSemana] = useState<number | null>(null);
   const [rfqsTotal, setRfqsTotal] = useState<number | null>(null);
+  const [rfqsPublicados, setRfqsPublicados] = useState<number | null>(null);
   const [globalLog, setGlobalLog] = useState<LogEntry[]>([]);
+  const [logFilter, setLogFilter] = useState<string>('todos');
   const [agentStats, setAgentStats] = useState<AgentStats[]>([]);
   const [completadosHoy, setCompletadosHoy] = useState<number | null>(null);
   const [totalCorriendo, setTotalCorriendo] = useState<number | null>(null);
@@ -227,21 +240,28 @@ export default function DashboardPanel() {
       .from('rfqs')
       .select('id', { count: 'exact', head: true });
     setRfqsTotal(total ?? 0);
+
+    // Productos publicados POR NOSOTROS (no el total del catálogo 1CRM)
+    const { count: publicados } = await supabase
+      .from('rfqs')
+      .select('id', { count: 'exact', head: true })
+      .eq('estado', 'publicado');
+    setRfqsPublicados(publicados ?? 0);
   }
 
   async function fetchGlobalLog() {
     const { data } = await supabase
       .from('jobs')
-      .select('agente, estado, created_at, finished_at, output')
+      .select('agente, estado, created_at, finished_at, error')
       .order('created_at', { ascending: false })
-      .limit(40);
+      .limit(120);
     if (data) {
-      setGlobalLog(data.map((j: { agente: string; estado: string; created_at: string; finished_at: string | null; output: Record<string, unknown> | null }) => ({
+      setGlobalLog(data.map((j: { agente: string; estado: string; created_at: string; finished_at: string | null; error: unknown }) => ({
         agente: j.agente,
         estado: j.estado,
         created_at: j.created_at,
         finished_at: j.finished_at,
-        error: (j.output && typeof j.output.error === 'string') ? j.output.error : null,
+        error: formatError(j.error),
       })));
     }
   }
@@ -325,6 +345,11 @@ export default function DashboardPanel() {
   const agenteLimite = agentesActivos?.limite ?? 5;
   const agenteValor = agentesActivos?.valor ?? 0;
 
+  // Heartbeat del backend: si el último latido es < 2h, está vivo
+  const heartbeat = getResource('sistema', 'backend_activo');
+  const lastBeat = heartbeat?.valor_texto ? new Date(heartbeat.valor_texto).getTime() : null;
+  const backendVivo = lastBeat != null && (Date.now() - lastBeat) < 2 * 3600 * 1000;
+
   // Fallas: cualquier recurso en estado critical/warning, o con un texto de error.
   // El monitor escribe valor_texto="Error: ..." y estado="critical" cuando un check falla.
   const fallas: Falla[] = resources
@@ -347,12 +372,31 @@ export default function DashboardPanel() {
     // priorizar critical primero
     .sort((a, b) => (a.estado === 'critical' ? -1 : 1) - (b.estado === 'critical' ? -1 : 1));
 
+  // Agentes presentes en el log (para las pestañas de filtro)
+  const agentesEnLog = Array.from(new Set(globalLog.map(e => e.agente))).filter(Boolean);
+  const totalErrores = globalLog.filter(e => e.estado === 'fallido').length;
+
+  const filteredLog = globalLog.filter(e => {
+    if (logFilter === 'todos') return true;
+    if (logFilter === 'errores') return e.estado === 'fallido';
+    return e.agente === logFilter;
+  });
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#0d0d0d] overflow-y-auto scrollbar-light">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-[#1f1f1f]">
-        <h2 className="text-[15px] font-semibold text-white">Dashboard</h2>
-        <p className="text-[11px] text-[#666] mt-0.5">Brain - MRO Master Pro - Vista general</p>
+      <div className="px-6 py-5 border-b border-[#1f1f1f] flex items-center justify-between">
+        <div>
+          <h2 className="text-[15px] font-semibold text-white">Dashboard</h2>
+          <p className="text-[11px] text-[#666] mt-0.5">Brain - MRO Master Pro - Vista general</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${backendVivo ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+          <span className="text-[10px] text-[#888]">
+            {backendVivo ? 'Backend activo' : 'Backend sin señal'}
+            {lastBeat && <span className="text-[#555] ml-1">· {timeAgo(heartbeat!.valor_texto!)}</span>}
+          </span>
+        </div>
       </div>
 
       <div className="p-6 space-y-6">
@@ -530,11 +574,11 @@ export default function DashboardPanel() {
             />
             <BusinessCard
               icon={TrendingUp}
-              label="Productos publicados"
-              value={crmProductos?.valor != null ? String(Math.round(crmProductos.valor)) : '--'}
-              subtitle="Catalogo 1CRM"
+              label="Publicados por nosotros"
+              value={rfqsPublicados != null ? String(rfqsPublicados) : '--'}
+              subtitle={crmProductos?.valor != null ? `Catálogo 1CRM: ${Math.round(crmProductos.valor).toLocaleString()}` : 'RFQs publicados'}
               color="#f59e0b"
-              chart={<MiniChart data={crmProductos?.valor != null ? [0, crmProductos.valor] : [0, 0]} color="#f59e0b" height={36} />}
+              chart={<MiniChart data={rfqsPublicados != null ? [0, rfqsPublicados] : [0, 0]} color="#f59e0b" height={36} />}
             />
             <BusinessCard
               icon={Users}
@@ -632,9 +676,24 @@ export default function DashboardPanel() {
 
         {/* Section: Log global */}
         <section className="pb-4">
-          <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-3">Log Global</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest">Log Global</p>
+            <div className="flex items-center gap-1 flex-wrap">
+              <LogFilterTab label="Todos" count={globalLog.length} active={logFilter === 'todos'} onClick={() => setLogFilter('todos')} />
+              <LogFilterTab label="Errores" count={totalErrores} active={logFilter === 'errores'} onClick={() => setLogFilter('errores')} danger />
+              {agentesEnLog.map(ag => (
+                <LogFilterTab
+                  key={ag}
+                  label={AGENTE_LABEL[ag] || ag}
+                  count={globalLog.filter(e => e.agente === ag).length}
+                  active={logFilter === ag}
+                  onClick={() => setLogFilter(ag)}
+                />
+              ))}
+            </div>
+          </div>
           <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl divide-y divide-[#1f1f1f] max-h-80 overflow-y-auto scrollbar-light">
-            {globalLog.length > 0 ? globalLog.map((entry, i) => {
+            {filteredLog.length > 0 ? filteredLog.map((entry, i) => {
               const dotColor = entry.estado === 'fallido' || entry.estado === 'error' ? 'bg-red-500'
                 : entry.estado === 'corriendo' ? 'bg-cyan-500'
                 : entry.estado === 'pendiente' ? 'bg-amber-500'
@@ -653,12 +712,29 @@ export default function DashboardPanel() {
                 </div>
               );
             }) : (
-              <div className="px-4 py-2.5 text-[11px] text-[#555]">Sin registros</div>
+              <div className="px-4 py-2.5 text-[11px] text-[#555]">
+                {logFilter === 'errores' ? 'Sin errores en el registro reciente 🎉' : 'Sin registros'}
+              </div>
             )}
           </div>
         </section>
       </div>
     </div>
+  );
+}
+
+function LogFilterTab({ label, count, active, onClick, danger }: { label: string; count: number; active: boolean; onClick: () => void; danger?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors ${
+        active
+          ? danger ? 'bg-red-500/20 text-red-300' : 'bg-[#2a2a2a] text-white'
+          : danger && count > 0 ? 'text-red-400/70 hover:text-red-300' : 'text-[#666] hover:text-[#999]'
+      }`}
+    >
+      {label} <span className="opacity-60">{count}</span>
+    </button>
   );
 }
 
