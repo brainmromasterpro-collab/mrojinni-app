@@ -13,6 +13,8 @@ interface Opcion {
   score_ranking: number | null;
   fuente: string | null;
   imagen_url: string | null;
+  url: string | null;
+  nombre_producto: string | null;
 }
 
 interface RFQRow {
@@ -27,7 +29,7 @@ interface RFQRow {
   opciones: Opcion[];
 }
 
-type RowStatus = 'searching' | 'no_results' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
+type RowStatus = 'searching' | 'no_results' | 'in_crm' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
 
 function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'publicado') return 'published';
@@ -41,6 +43,7 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
   const opciones = rfq.opciones || [];
   if (rfq.estado === 'busqueda_completa' && opciones.length === 0) return 'no_results';
+  if (opciones.some(o => o.fuente === '1crm_productos')) return 'in_crm';
   if (opciones.length > 0) return 'has_options';
   return 'searching';
 }
@@ -49,6 +52,7 @@ function getStatusCell(status: RowStatus): { icon: string; label: string; color:
   switch (status) {
     case 'searching':        return { icon: '⏳', label: 'Buscando...',      color: 'text-[#888]' };
     case 'no_results':       return { icon: '—',  label: 'Sin resultados',   color: 'text-[#666]' };
+    case 'in_crm':           return { icon: '✦',  label: 'En catálogo',      color: 'text-[#a78bfa]' };
     case 'has_options':      return { icon: '◉',  label: 'Listo',            color: 'text-[#4ade80]' };
     case 'processing_image': return { icon: '⏳', label: 'Buscando imagen',  color: 'text-[#888]' };
     case 'image_pending':    return { icon: '⚠',  label: 'Imagen fallida',   color: 'text-[#fb923c]' };
@@ -423,7 +427,8 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
           const opciones = [...(rfq.opciones || [])].sort((a, b) => (b.score_ranking || 0) - (a.score_ranking || 0));
           const bestOption = opciones[0];
           const statusCell = getStatusCell(status);
-          const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending';
+          const crmOpcion = opciones.find(o => o.fuente === '1crm_productos') || null;
+          const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending' || status === 'in_crm';
           const selectedOpData = opciones.find(o => o.id === selectedOpcion);
           const isTerminal = status === 'published' || status === 'no_results' || status === 'publish_failed';
 
@@ -458,6 +463,9 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
                 {/* Precio */}
                 <div className="flex items-center">
+                  {status === 'in_crm' && crmOpcion?.precio_orig != null && (
+                    <span className="text-[#a78bfa] text-[11px]">${crmOpcion.precio_orig} <span className="text-[#555]">{crmOpcion.moneda || 'USD'}</span></span>
+                  )}
                   {status === 'has_options' && !selectedOpData && bestOption?.precio_orig != null && (
                     <span className="text-[#d4d4d4] text-[11px]">${bestOption.precio_orig} <span className="text-[#555]">{bestOption.moneda || 'USD'}</span></span>
                   )}
@@ -471,7 +479,17 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
                 {/* Link */}
                 <div className="flex items-center justify-end">
-                  {status === 'published' && rfq.crm_url ? (
+                  {status === 'in_crm' && crmOpcion?.url ? (
+                    <a
+                      href={crmOpcion.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[#a78bfa] hover:text-[#c4b5fd] text-[11px] font-sans transition-colors"
+                    >
+                      Ver CRM ↗
+                    </a>
+                  ) : status === 'published' && rfq.crm_url ? (
                     <a
                       href={rfq.crm_url}
                       target="_blank"
@@ -486,6 +504,44 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                   )}
                 </div>
               </button>
+
+              {/* Expanded: already in CRM catalog */}
+              {isExpanded && status === 'in_crm' && crmOpcion && (
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-3 pl-8">
+                  <div className="flex items-start gap-3">
+                    {crmOpcion.imagen_url && (
+                      <img
+                        src={crmOpcion.imagen_url}
+                        alt={rfq.modelo}
+                        className="w-14 h-14 object-contain rounded border border-[#333] bg-[#111] flex-shrink-0"
+                      />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] text-[#a78bfa] font-semibold mb-0.5">Ya existe en el catálogo 1CRM</p>
+                      {crmOpcion.nombre_producto && (
+                        <p className="text-[11px] text-[#888] truncate mb-1">{crmOpcion.nombre_producto}</p>
+                      )}
+                      <div className="flex items-center gap-3">
+                        {crmOpcion.precio_orig != null && (
+                          <span className="text-[11px] text-[#d4d4d4]">${crmOpcion.precio_orig} {crmOpcion.moneda || 'USD'}</span>
+                        )}
+                        <span className="text-[10px] text-[#4ade80]">{crmOpcion.disponibilidad || 'en_stock'}</span>
+                      </div>
+                    </div>
+                    {crmOpcion.url && (
+                      <a
+                        href={crmOpcion.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-[11px] text-[#a78bfa] hover:text-[#c4b5fd] transition-colors flex-shrink-0"
+                      >
+                        Abrir en CRM ↗
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Expanded: provider selection */}
               {isExpanded && status === 'has_options' && (
