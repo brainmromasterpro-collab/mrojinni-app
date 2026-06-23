@@ -1550,6 +1550,13 @@ export default function App() {
     pushLog('Stream limpiado - la actividad queda registrada en los logs');
   }, [activeStreamId]);
 
+  // Seleccionar un stream desde el TopBar: cambiar de stream Y volver a la
+  // vista de chat (si estabas en dashboard/logs/config, el stream no se veía).
+  function handleSelectStream(id: string) {
+    setActiveStreamId(id);
+    setActiveNav('chat');
+  }
+
   function handleCreateStream() {
     const newStream: Stream = {
       id: crypto.randomUUID(),
@@ -1560,6 +1567,7 @@ export default function App() {
     };
     setStreams((prev) => [...prev, newStream]);
     setActiveStreamId(newStream.id);
+    setActiveNav('chat');
   }
 
   return (
@@ -1567,7 +1575,7 @@ export default function App() {
       <TopBar
         streams={streams}
         activeStreamId={activeStreamId}
-        onSelectStream={setActiveStreamId}
+        onSelectStream={handleSelectStream}
         onCreateStream={handleCreateStream}
       />
       <div className="flex flex-1 min-h-0">
