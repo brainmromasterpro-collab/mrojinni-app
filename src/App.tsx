@@ -10,7 +10,7 @@ import InfraPanel from './components/InfraPanel';
 import DashboardPanel from './components/DashboardPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
 import { supabase } from './lib/supabase';
-import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache } from './lib/storage';
+import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache, clearMessagesCache, deleteStreamMessages } from './lib/storage';
 import type { Stream, Message } from './lib/types';
 
 const DEMO_STREAM_1 = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
@@ -1532,6 +1532,24 @@ export default function App() {
     startImagenPolling(rfqId);
   }, [activeStreamId]);
 
+  const handleClearStream = useCallback(async () => {
+    if (!activeStreamId) return;
+
+    // Detener polls activos del stream para que no re-inyecten mensajes
+    rfqPollsRef.current.forEach((interval) => clearInterval(interval));
+    rfqPollsRef.current.clear();
+    if (imagenPollingRef.current) { clearInterval(imagenPollingRef.current); imagenPollingRef.current = null; }
+    if (publicadorPollingRef.current) { clearInterval(publicadorPollingRef.current); publicadorPollingRef.current = null; }
+
+    // Quitar mensajes del stream de la vista
+    setMessagesRaw((prev) => prev.filter((m) => m.stream_id !== activeStreamId));
+
+    // Limpiar cache de sesión y borrar de la DB (RFQs/jobs/notificaciones intactos)
+    clearMessagesCache(activeStreamId);
+    await deleteStreamMessages(activeStreamId);
+    pushLog('Stream limpiado - la actividad queda registrada en los logs');
+  }, [activeStreamId]);
+
   function handleCreateStream() {
     const newStream: Stream = {
       id: crypto.randomUUID(),
@@ -1579,6 +1597,7 @@ export default function App() {
             onParseConfirm={handleParseConfirm}
             onDocsConfirm={handleDocsConfirm}
             onPublicar={handlePublicar}
+            onClearStream={handleClearStream}
           />
         )}
         {!['dashboard', 'activity', 'connectors', 'agentes', 'infra'].includes(activeNav) && (

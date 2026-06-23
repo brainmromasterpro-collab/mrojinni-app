@@ -19,12 +19,13 @@ interface StreamAreaProps {
   onParseConfirm: (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => void;
   onDocsConfirm: (messageId: string, products: { marca: string; modelo: string; qty: number }[]) => void;
   onPublicar: (rfqId: string, proveedorRank: number) => void;
+  onClearStream: () => void;
 }
 
 const FILE_ACCEPT = '.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,.ogg';
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
-export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar }: StreamAreaProps) {
+export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream }: StreamAreaProps) {
   const [input, setInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
@@ -296,6 +297,18 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
           <span className="text-[10px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft px-2.5 py-0.5 rounded-full">
             Agente Buscador activo
           </span>
+          <button
+            onClick={() => {
+              if (window.confirm('¿Limpiar este stream? Los mensajes se quitarán de la vista. Los RFQs y la actividad quedan registrados en los logs.')) {
+                onClearStream();
+              }
+            }}
+            className="ml-auto flex items-center gap-1.5 text-[11px] text-[#999] hover:text-red-500 border border-brain-border hover:border-red-300 rounded-lg px-2.5 py-1 transition-colors"
+            title="Limpiar stream (la actividad queda en los logs)"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Limpiar
+          </button>
         </div>
       </div>
 

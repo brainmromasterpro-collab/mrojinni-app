@@ -46,6 +46,22 @@ export function saveMessagesToCache(streamId: string, msgs: Message[]): void {
   } catch { /* storage full - ignore */ }
 }
 
+export function clearMessagesCache(streamId: string): void {
+  try {
+    sessionStorage.removeItem(CACHE_PREFIX + streamId);
+  } catch { /* ignore */ }
+}
+
+// Borra los mensajes de un stream de la DB. RFQs, jobs y notificaciones
+// viven en sus propias tablas y NO se tocan.
+export async function deleteStreamMessages(streamId: string): Promise<void> {
+  const { error } = await supabase
+    .from('messages')
+    .delete()
+    .eq('stream_id', streamId);
+  if (error) console.error('[storage] Error deleting stream messages:', error);
+}
+
 export async function persistMessages(msgs: Message[]): Promise<void> {
   if (msgs.length === 0) return;
 
