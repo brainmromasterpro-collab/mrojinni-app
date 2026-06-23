@@ -32,6 +32,14 @@ interface RFQRow {
 
 type RowStatus = 'searching' | 'no_results' | 'in_crm' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
 
+function normalizeCrmUrl(url: string | null): string | null {
+  if (!url) return null;
+  const match = url.match(/[?&]record=([a-f0-9-]{20,})/i);
+  if (!match) return url;
+  const base = url.split('/index.php')[0];
+  return `${base}/index.php?module=ProductCatalog&action=DetailView&record=${match[1]}`;
+}
+
 function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'publicado') return 'published';
   if (rfq.estado === 'publicando') return 'publishing';
@@ -480,9 +488,9 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
                 {/* Link */}
                 <div className="flex items-center justify-end">
-                  {status === 'in_crm' && crmOpcion?.url ? (
+                  {status === 'in_crm' && normalizeCrmUrl(crmOpcion?.url ?? null) ? (
                     <a
-                      href={crmOpcion.url}
+                      href={normalizeCrmUrl(crmOpcion!.url)!}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
@@ -529,9 +537,9 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                         <span className="text-[10px] text-[#4ade80]">{crmOpcion.disponibilidad || 'en_stock'}</span>
                       </div>
                     </div>
-                    {crmOpcion.url && (
+                    {normalizeCrmUrl(crmOpcion.url) && (
                       <a
-                        href={crmOpcion.url}
+                        href={normalizeCrmUrl(crmOpcion.url)!}
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => e.stopPropagation()}
