@@ -15,6 +15,7 @@ interface Opcion {
   imagen_url: string | null;
   url: string | null;
   nombre_producto: string | null;
+  notas: string | null;
 }
 
 interface RFQRow {
@@ -518,8 +519,8 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-[11px] text-[#a78bfa] font-semibold mb-0.5">Ya existe en el catálogo 1CRM</p>
-                      {crmOpcion.nombre_producto && (
-                        <p className="text-[11px] text-[#888] truncate mb-1">{crmOpcion.nombre_producto}</p>
+                      {crmOpcion.notas && (
+                        <p className="text-[11px] text-[#888] truncate mb-1">{crmOpcion.notas}</p>
                       )}
                       <div className="flex items-center gap-3">
                         {crmOpcion.precio_orig != null && (
