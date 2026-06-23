@@ -30,7 +30,7 @@ interface RFQRow {
   opciones: Opcion[];
 }
 
-type RowStatus = 'searching' | 'no_results' | 'in_crm' | 'has_options' | 'processing_image' | 'image_pending' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
+type RowStatus = 'searching' | 'no_results' | 'in_crm' | 'has_options' | 'processing_image' | 'image_pending' | 'no_image' | 'image_ready' | 'publishing' | 'published' | 'publish_failed';
 
 function normalizeCrmUrl(url: string | null): string | null {
   if (!url) return null;
@@ -48,7 +48,7 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'foto_pendiente') return 'image_pending';
   if (rfq.estado === 'publicacion_fallida') return 'publish_failed';
   if (rfq.estado === 'imagen_fallida') return 'image_pending';
-  if (rfq.estado === 'sin_imagen') return 'image_pending';
+  if (rfq.estado === 'sin_imagen') return 'no_image';
   const searchingStates = ['recibido', 'buscando'];
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
   const opciones = rfq.opciones || [];
@@ -66,6 +66,7 @@ function getStatusCell(status: RowStatus): { icon: string; label: string; color:
     case 'has_options':      return { icon: '◉',  label: 'Cotizaciones',     color: 'text-[#4ade80]' };
     case 'processing_image': return { icon: '⏳', label: 'Buscando imagen',  color: 'text-[#888]' };
     case 'image_pending':    return { icon: '⚠',  label: 'Imagen fallida',   color: 'text-[#fb923c]' };
+    case 'no_image':         return { icon: 'ℹ',  label: 'Sin imagen',       color: 'text-[#9ca3af]' };
     case 'image_ready':      return { icon: '🖼',  label: 'Foto lista',       color: 'text-[#4ade80]' };
     case 'publishing':       return { icon: '⏳', label: 'Publicando...',    color: 'text-[#888]' };
     case 'published':        return { icon: '✅', label: 'Publicado',        color: 'text-[#4ade80]' };
@@ -438,7 +439,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
           const bestOption = opciones[0];
           const statusCell = getStatusCell(status);
           const crmOpcion = opciones.find(o => o.fuente === '1crm_productos') || null;
-          const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending' || status === 'in_crm';
+          const canExpand = status === 'has_options' || status === 'image_ready' || status === 'image_pending' || status === 'no_image' || status === 'in_crm';
           const selectedOpData = opciones.find(o => o.id === selectedOpcion);
           const isTerminal = status === 'published' || status === 'no_results' || status === 'publish_failed';
 
@@ -597,6 +598,34 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Expanded: no image found (informativo, no es falla) */}
+              {isExpanded && status === 'no_image' && (
+                <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-3 pl-8">
+                  <p className="text-[11px] text-[#cbd5e1] mb-1">
+                    No se encontró una imagen para este producto en las fuentes automáticas.
+                  </p>
+                  <p className="text-[10px] text-[#777] mb-2.5">
+                    No es un error — algunos productos industriales no tienen imágenes disponibles. Puedes publicarlo sin imagen o reintentar la búsqueda.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handlePublishCRMIndividual(rfq.id); }}
+                      disabled={publishingIndividual === rfq.id}
+                      className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors"
+                    >
+                      {publishingIndividual === rfq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Send className="w-3 h-3" /> Publicar sin imagen</>}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleRetryImage(rfq.id); }}
+                      className="flex items-center gap-1 text-[11px] text-[#888] hover:text-[#ccc] transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reintentar imagen
+                    </button>
                   </div>
                 </div>
               )}
