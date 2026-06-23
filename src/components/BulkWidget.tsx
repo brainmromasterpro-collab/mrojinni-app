@@ -62,7 +62,7 @@ function getStatusCell(status: RowStatus): { icon: string; label: string; color:
     case 'searching':        return { icon: '⏳', label: 'Buscando...',      color: 'text-[#888]' };
     case 'no_results':       return { icon: '—',  label: 'Sin resultados',   color: 'text-[#666]' };
     case 'in_crm':           return { icon: '✦',  label: 'En catálogo',      color: 'text-[#a78bfa]' };
-    case 'has_options':      return { icon: '◉',  label: 'Listo',            color: 'text-[#4ade80]' };
+    case 'has_options':      return { icon: '◉',  label: 'Cotizaciones',     color: 'text-[#4ade80]' };
     case 'processing_image': return { icon: '⏳', label: 'Buscando imagen',  color: 'text-[#888]' };
     case 'image_pending':    return { icon: '⚠',  label: 'Imagen fallida',   color: 'text-[#fb923c]' };
     case 'image_ready':      return { icon: '🖼',  label: 'Foto lista',       color: 'text-[#4ade80]' };
@@ -497,6 +497,16 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                       className="text-[#a78bfa] hover:text-[#c4b5fd] text-[11px] font-sans transition-colors"
                     >
                       Ver CRM ↗
+                    </a>
+                  ) : status === 'has_options' && bestOption?.url ? (
+                    <a
+                      href={bestOption.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[#4ade80] hover:text-[#86efac] text-[11px] font-sans transition-colors"
+                    >
+                      Ver ↗
                     </a>
                   ) : status === 'published' && rfq.crm_url ? (
                     <a
