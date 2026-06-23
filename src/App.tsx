@@ -67,7 +67,10 @@ export default function App() {
   }, [messages]);
 
   const streamMessages = (() => {
-    const raw = messages.filter((m) => m.stream_id === activeStreamId);
+    const raw = messages
+      .filter((m) => m.stream_id === activeStreamId)
+      .slice()
+      .sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''));
     const seenWidgetRfqs = new Set<string>();
     const hasWidget = raw.some((m) => m.tipo === 'widget');
     return raw.filter((msg) => {
@@ -207,15 +210,18 @@ export default function App() {
       });
     }
 
-    // Then load from Supabase (authoritative source)
+    // Then load from Supabase (authoritative source). Reconcile by id and
+    // re-sort por created_at — el merge anterior solo agregaba al final, lo que
+    // dejaba el historial reciente incompleto o desordenado.
     loadMessages(activeStreamId).then((loaded) => {
-      if (!cancelled && loaded.length > 0) {
-        setMessagesRaw((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const newMsgs = loaded.filter((m) => !existingIds.has(m.id));
-          return newMsgs.length > 0 ? [...prev, ...newMsgs] : prev;
-        });
-      }
+      if (cancelled || loaded.length === 0) return;
+      setMessagesRaw((prev) => {
+        const byId = new Map(prev.map((m) => [m.id, m]));
+        for (const m of loaded) byId.set(m.id, m); // DB es autoritativa
+        return Array.from(byId.values()).sort((a, b) =>
+          (a.created_at || '').localeCompare(b.created_at || '')
+        );
+      });
     });
     return () => { cancelled = true; };
   }, [activeStreamId]);

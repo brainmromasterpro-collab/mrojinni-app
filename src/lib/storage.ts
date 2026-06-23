@@ -3,23 +3,33 @@ import type { Message } from './types';
 
 const CACHE_PREFIX = 'brain_msgs_';
 
+// Cuántos mensajes recientes traer por stream. Supabase limita a 1000 por defecto;
+// pedir ascendente sin límite devolvía los 1000 MÁS VIEJOS y nunca los recientes.
+const HISTORY_LIMIT = 500;
+
 export async function loadMessages(streamId: string): Promise<Message[]> {
+  // Traer los más RECIENTES (descendente + limit) y luego invertir a orden cronológico.
   const { data, error } = await supabase
     .from('messages')
     .select('*')
     .eq('stream_id', streamId)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .limit(HISTORY_LIMIT);
 
   if (error) {
     console.error('[storage] Error loading messages:', error);
     return loadMessagesFromCache(streamId);
   }
 
-  if (data && data.length > 0) {
-    saveMessagesToCache(streamId, data);
+  const ordered = (data || []).slice().reverse(); // volver a ascendente
+
+  if (ordered.length > 0) {
+    saveMessagesToCache(streamId, ordered);
+    return ordered;
   }
 
-  return data || loadMessagesFromCache(streamId);
+  // Sin datos en DB: no sobrescribir cache; devolver lo que haya en cache
+  return loadMessagesFromCache(streamId);
 }
 
 export function loadMessagesFromCache(streamId: string): Message[] {
