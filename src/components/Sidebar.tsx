@@ -1,18 +1,71 @@
+import { useState, useEffect } from 'react';
 import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface SidebarProps {
   activeNav: string;
   onNavSelect: (id: string) => void;
 }
 
-const kpis = [
-  { value: '12', label: 'RFQs activos', highlight: true },
-  { value: '$0.84', label: 'Costo/llamada', highlight: false },
-  { value: '4.2k', label: 'Tokens hoy', highlight: false },
-  { value: '2.1 GB', label: 'Storage', highlight: false },
+interface KpiTile {
+  value: string;
+  label: string;
+  highlight: boolean;
+}
+
+const PLACEHOLDER_KPIS: KpiTile[] = [
+  { value: '--', label: 'RFQs activos', highlight: true },
+  { value: '--', label: 'RFQs / mes', highlight: false },
+  { value: '--', label: 'Tokens hoy', highlight: false },
+  { value: '--', label: 'Storage', highlight: false },
 ];
 
+// Misma abreviación compacta para números grandes (73042 -> 73k)
+function compact(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(Math.round(n));
+}
+
 export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
+  const [kpis, setKpis] = useState<KpiTile[]>(PLACEHOLDER_KPIS);
+
+  useEffect(() => {
+    async function fetchKpis() {
+      // Mismas fuentes que el DashboardPanel
+      const { count: activos } = await supabase
+        .from('rfqs')
+        .select('id', { count: 'exact', head: true })
+        .neq('estado', 'publicado');
+
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const { count: mes } = await supabase
+        .from('rfqs')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', startOfMonth.toISOString());
+
+      const { data: res } = await supabase
+        .from('resource_status')
+        .select('servicio, metrica, valor')
+        .in('servicio', ['anthropic', 'supabase']);
+
+      const tokens = res?.find(r => r.servicio === 'anthropic' && r.metrica === 'tokens_hoy')?.valor;
+      const storage = res?.find(r => r.servicio === 'supabase' && r.metrica === 'storage_gb')?.valor;
+
+      setKpis([
+        { value: activos != null ? String(activos) : '--', label: 'RFQs activos', highlight: true },
+        { value: mes != null ? String(mes) : '--', label: 'RFQs / mes', highlight: false },
+        { value: tokens != null ? compact(tokens) : '--', label: 'Tokens hoy', highlight: false },
+        { value: storage != null ? `${storage.toFixed(2)} GB` : '--', label: 'Storage', highlight: false },
+      ]);
+    }
+    fetchKpis();
+    const interval = setInterval(fetchKpis, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <aside className="hidden md:flex w-sidebar-l h-full bg-brain-dark border-r border-brain-card flex-col overflow-y-auto scrollbar-thin flex-shrink-0">
       {/* Dashboard KPIs */}
