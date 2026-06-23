@@ -30,13 +30,28 @@ interface AgentInfo {
   status: AgentStatus;
 }
 
-const AGENT_DEFS = [
-  { name: 'Lector', key: 'lector' },
-  { name: 'Buscador', key: 'buscador' },
-  { name: 'Imagen', key: 'imagen' },
-  { name: 'Ficha', key: 'ficha' },
-  { name: 'Publicador', key: 'publicador' },
-];
+// Nombre legible por clave de agente. Se amplía solo: agentes nuevos que no
+// estén aquí se muestran con su clave capitalizada.
+const AGENT_LABEL: Record<string, string> = {
+  lector: 'Lector',
+  buscador: 'Buscador',
+  imagen: 'Imagen',
+  ficha: 'Ficha',
+  publicador: 'Publicador',
+  notificador: 'Notificador',
+  chat: 'Chat',
+  monitor: 'Monitor',
+};
+
+// Orden de presentación (pipeline). Agentes desconocidos van al final.
+const AGENT_ORDER = ['lector', 'buscador', 'imagen', 'ficha', 'publicador'];
+
+// Agentes internos de plumbing que no se muestran como "trabajando" en el stream.
+const AGENT_HIDDEN = new Set(['notificador']);
+
+function agentLabel(key: string): string {
+  return AGENT_LABEL[key] || (key.charAt(0).toUpperCase() + key.slice(1));
+}
 
 
 const defaultFuentes: Source[] = [
@@ -69,7 +84,7 @@ export default function RightPanel({ visible, streamId }: RightPanelProps) {
   return (
     <aside className="hidden md:flex w-sidebar-r h-full bg-brain-dark border-l border-brain-card flex-col overflow-y-auto scrollbar-thin flex-shrink-0">
       {/* Agents */}
-      <AgentsSection />
+      <AgentsSection streamId={streamId} />
 
       {/* Live logs */}
       <LiveLogsSection streamId={streamId} />
@@ -95,53 +110,75 @@ export default function RightPanel({ visible, streamId }: RightPanelProps) {
   );
 }
 
-function AgentsSection() {
-  const [agents, setAgents] = useState<AgentInfo[]>(
-    AGENT_DEFS.map((d) => ({ ...d, status: 'waiting' as AgentStatus }))
-  );
+function AgentsSection({ streamId }: { streamId: string | null }) {
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
 
   useEffect(() => {
-    async function fetchJobStatuses() {
+    if (!streamId) { setAgents([]); return; }
+    let cancelled = false;
+
+    async function fetchStreamAgents() {
+      // Los jobs se vinculan al stream vía rfq_id -> rfqs.stream_id.
+      const { data: rfqs } = await supabase
+        .from('rfqs')
+        .select('id')
+        .eq('stream_id', streamId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      const rfqIds = (rfqs || []).map((r) => r.id);
+      if (rfqIds.length === 0) { if (!cancelled) setAgents([]); return; }
+
       const { data: jobs } = await supabase
         .from('jobs')
         .select('agente, estado, finished_at')
+        .in('rfq_id', rfqIds)
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(200);
 
-      if (!jobs) return;
+      if (cancelled || !jobs) { if (!cancelled) setAgents([]); return; }
 
-      // Un agente solo se "enciende" si está EN USO ahora (job pendiente/corriendo)
-      // o si acaba de terminar (< 2 min). El resto del tiempo está en espera.
+      // Agentes que este stream realmente usa (excluye plumbing interno)
+      const keys = Array.from(new Set(jobs.map((j) => j.agente)))
+        .filter((k) => k && !AGENT_HIDDEN.has(k))
+        .sort((a, b) => {
+          const ia = AGENT_ORDER.indexOf(a); const ib = AGENT_ORDER.indexOf(b);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        });
+
+      // Un agente se "enciende" solo si está EN USO (pendiente/corriendo) o
+      // acaba de terminar (< 2 min); si no, queda en espera (atenuado).
       const now = Date.now();
       const RECENT_MS = 2 * 60 * 1000;
-      const statusMap: Record<string, AgentStatus> = {};
-      for (const def of AGENT_DEFS) {
-        const agentJobs = jobs.filter((j) => j.agente === def.key);
-        const hasRunning = agentJobs.some((j) => j.estado === 'pendiente' || j.estado === 'corriendo');
-        const justFinished = agentJobs.some((j) =>
+      const list: AgentInfo[] = keys.map((key) => {
+        const aj = jobs.filter((j) => j.agente === key);
+        const hasRunning = aj.some((j) => j.estado === 'pendiente' || j.estado === 'corriendo');
+        const justFinished = aj.some((j) =>
           j.estado === 'completado' && j.finished_at && (now - new Date(j.finished_at).getTime()) < RECENT_MS
         );
-        statusMap[def.key] = hasRunning ? 'running' : justFinished ? 'ok' : 'waiting';
-      }
+        return { name: agentLabel(key), key, status: hasRunning ? 'running' : justFinished ? 'ok' : 'waiting' };
+      });
 
-      setAgents(AGENT_DEFS.map((d) => ({ ...d, status: statusMap[d.key] || 'waiting' })));
+      if (!cancelled) setAgents(list);
     }
 
-    fetchJobStatuses();
-    const interval = setInterval(fetchJobStatuses, 5000);
-    return () => clearInterval(interval);
-  }, []);
+    fetchStreamAgents();
+    const interval = setInterval(fetchStreamAgents, 5000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [streamId]);
 
   return (
     <Section title="Stream config">
       <div className="px-3 pb-1">
         <p className="text-[10px] text-[#888] flex items-center gap-1.5 px-1 py-1">
-          Agentes activos
+          Agentes del stream
         </p>
         <div className="space-y-1">
-          {agents.map((a) => (
+          {agents.length === 0 ? (
+            <p className="px-2 py-1.5 text-[10px] text-[#555]">Sin actividad de agentes en este stream</p>
+          ) : agents.map((a) => (
             <div
-              key={a.name}
+              key={a.key}
               className={`flex items-center justify-between px-2 py-1.5 bg-brain-card rounded-md ${
                 a.status === 'waiting' ? 'opacity-40' : ''
               }`}
