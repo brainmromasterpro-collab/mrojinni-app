@@ -48,6 +48,7 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'foto_pendiente') return 'image_pending';
   if (rfq.estado === 'publicacion_fallida') return 'publish_failed';
   if (rfq.estado === 'imagen_fallida') return 'image_pending';
+  if (rfq.estado === 'sin_imagen') return 'image_pending';
   const searchingStates = ['recibido', 'buscando'];
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
   const opciones = rfq.opciones || [];
@@ -610,6 +611,13 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                   >
                     <RotateCcw className="w-3 h-3" />
                     Reintentar
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handlePublishCRMIndividual(rfq.id); }}
+                    disabled={publishingIndividual === rfq.id}
+                    className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] disabled:opacity-40 transition-colors"
+                  >
+                    {publishingIndividual === rfq.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Send className="w-3 h-3" /> Publicar sin imagen</>}
                   </button>
                 </div>
               )}
