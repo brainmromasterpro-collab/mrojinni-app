@@ -129,11 +129,48 @@ const useAgentMonitor = () => {
   return { recentJobs, agentStatus };
 };
 
+interface StreamRow {
+  id: string;
+  nombre: string;
+  tipo: string | null;
+  agentes: string[];
+}
+
 export default function AgentsPanel() {
   const [agents, setAgents] = useState<AgentConfig[]>(defaultAgents);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
+  const [streams, setStreams] = useState<StreamRow[]>([]);
   const { recentJobs, agentStatus } = useAgentMonitor();
+
+  useEffect(() => {
+    async function loadStreams() {
+      const { data } = await supabase.from('streams').select('*').order('created_at', { ascending: true });
+      if (data) {
+        setStreams(data.map((s) => ({
+          id: s.id,
+          nombre: s.nombre,
+          tipo: s.tipo ?? null,
+          agentes: Array.isArray(s.agentes) ? s.agentes : [],
+        })));
+      }
+    }
+    loadStreams();
+  }, []);
+
+  function toggleAgentForStream(streamId: string, agentId: string) {
+    setStreams((prev) => prev.map((s) => {
+      if (s.id !== streamId) return s;
+      const next = s.agentes.includes(agentId)
+        ? s.agentes.filter((a) => a !== agentId)
+        : [...s.agentes, agentId];
+      // Persistir en Supabase (columna streams.agentes text[])
+      supabase.from('streams').update({ agentes: next }).eq('id', s.id).then(({ error }) => {
+        if (error) console.error('[agentes] no se pudo guardar asignación:', error.message);
+      });
+      return { ...s, agentes: next };
+    }));
+  }
 
   const liveAgents = agents.map((a) => {
     if (a.id === 'buscador' || a.id === 'imagen') {
@@ -217,6 +254,55 @@ export default function AgentsPanel() {
               onToggle={() => handleToggleActive(agent.id)}
             />
           ))}
+        </div>
+      </div>
+
+      {/* Asignación de agentes por stream */}
+      <div className="px-6 pb-2">
+        <div className="max-w-2xl">
+          <h3 className="text-sm font-semibold text-[#888] mb-1 uppercase tracking-wider">
+            Asignación por stream
+          </h3>
+          <p className="text-[11px] text-[#888] mb-3">
+            Marca qué agentes atienden cada stream. El panel derecho de ese stream mostrará solo esos agentes.
+          </p>
+          <div className="space-y-3">
+            {streams.length === 0 && (
+              <p className="text-xs text-[#888]">No hay streams aún</p>
+            )}
+            {streams.map((stream) => (
+              <div key={stream.id} className="bg-white border border-brain-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2.5">
+                  <span className="text-[13px] font-semibold text-gray-900">{stream.nombre}</span>
+                  <span className="text-[9px] text-[#aaa] bg-brain-surface px-1.5 py-0.5 rounded">
+                    {stream.tipo || 'general'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {liveAgents.map((agent) => {
+                    const assigned = stream.agentes.includes(agent.id);
+                    return (
+                      <button
+                        key={agent.id}
+                        onClick={() => toggleAgentForStream(stream.id, agent.id)}
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                          assigned
+                            ? 'bg-[#059669]/10 border-[#059669]/40 text-[#059669]'
+                            : 'bg-white border-brain-border text-[#999] hover:border-[#059669]/30'
+                        }`}
+                      >
+                        {assigned && <Check className="w-3 h-3" />}
+                        {agent.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {stream.agentes.length === 0 && (
+                  <p className="text-[10px] text-[#bbb] mt-2">Sin agentes asignados — el panel mostrará los que tengan actividad</p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

@@ -118,7 +118,15 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
     let cancelled = false;
 
     async function fetchStreamAgents() {
-      // Los jobs se vinculan al stream vía rfq_id -> rfqs.stream_id.
+      // 1. Roster configurado: agentes asignados a este stream (AgentsPanel)
+      const { data: streamRow } = await supabase
+        .from('streams')
+        .select('*')
+        .eq('id', streamId)
+        .maybeSingle();
+      const asignados: string[] = Array.isArray(streamRow?.agentes) ? streamRow!.agentes : [];
+
+      // 2. Jobs del stream para el estado (vinculados vía rfq_id -> rfqs.stream_id)
       const { data: rfqs } = await supabase
         .from('rfqs')
         .select('id')
@@ -127,19 +135,24 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
         .limit(100);
 
       const rfqIds = (rfqs || []).map((r) => r.id);
-      if (rfqIds.length === 0) { if (!cancelled) setAgents([]); return; }
+      let jobs: { agente: string; estado: string; finished_at: string | null }[] = [];
+      if (rfqIds.length > 0) {
+        const { data } = await supabase
+          .from('jobs')
+          .select('agente, estado, finished_at')
+          .in('rfq_id', rfqIds)
+          .order('created_at', { ascending: false })
+          .limit(200);
+        jobs = data || [];
+      }
 
-      const { data: jobs } = await supabase
-        .from('jobs')
-        .select('agente, estado, finished_at')
-        .in('rfq_id', rfqIds)
-        .order('created_at', { ascending: false })
-        .limit(200);
+      if (cancelled) return;
 
-      if (cancelled || !jobs) { if (!cancelled) setAgents([]); return; }
-
-      // Agentes que este stream realmente usa (excluye plumbing interno)
-      const keys = Array.from(new Set(jobs.map((j) => j.agente)))
+      // 3. Roster: el asignado en config; si no hay, derivar de los jobs del stream
+      const base = asignados.length > 0
+        ? asignados
+        : Array.from(new Set(jobs.map((j) => j.agente)));
+      const keys = base
         .filter((k) => k && !AGENT_HIDDEN.has(k))
         .sort((a, b) => {
           const ia = AGENT_ORDER.indexOf(a); const ib = AGENT_ORDER.indexOf(b);
