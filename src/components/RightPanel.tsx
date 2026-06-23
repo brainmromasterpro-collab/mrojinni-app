@@ -135,11 +135,11 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
         .limit(100);
 
       const rfqIds = (rfqs || []).map((r) => r.id);
-      let jobs: { agente: string; estado: string; finished_at: string | null }[] = [];
+      let jobs: { agente: string; estado: string; finished_at: string | null; started_at: string | null; created_at: string }[] = [];
       if (rfqIds.length > 0) {
         const { data } = await supabase
           .from('jobs')
-          .select('agente, estado, finished_at')
+          .select('agente, estado, finished_at, started_at, created_at')
           .in('rfq_id', rfqIds)
           .order('created_at', { ascending: false })
           .limit(200);
@@ -159,13 +159,19 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
           return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
         });
 
-      // Un agente se "enciende" solo si está EN USO (pendiente/corriendo) o
-      // acaba de terminar (< 2 min); si no, queda en espera (atenuado).
+      // Un agente se "enciende" solo si está EN USO ahora o acaba de terminar.
+      // Un job pendiente/corriendo solo cuenta si es RECIENTE: hay jobs zombie
+      // que quedaron en "corriendo" por días tras un crash y no son uso real.
       const now = Date.now();
-      const RECENT_MS = 2 * 60 * 1000;
+      const RECENT_MS = 2 * 60 * 1000;       // "ok" tras terminar
+      const RUNNING_FRESH_MS = 15 * 60 * 1000; // máximo que un job activo es creíble
       const list: AgentInfo[] = keys.map((key) => {
         const aj = jobs.filter((j) => j.agente === key);
-        const hasRunning = aj.some((j) => j.estado === 'pendiente' || j.estado === 'corriendo');
+        const hasRunning = aj.some((j) => {
+          if (j.estado !== 'pendiente' && j.estado !== 'corriendo') return false;
+          const ts = j.started_at || j.created_at;
+          return ts != null && (now - new Date(ts).getTime()) < RUNNING_FRESH_MS;
+        });
         const justFinished = aj.some((j) =>
           j.estado === 'completado' && j.finished_at && (now - new Date(j.finished_at).getTime()) < RECENT_MS
         );
