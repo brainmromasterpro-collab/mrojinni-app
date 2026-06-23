@@ -11,16 +11,24 @@ interface KpiTile {
   value: string;
   label: string;
   highlight: boolean;
+  color?: string;
 }
 
 const PLACEHOLDER_KPIS: KpiTile[] = [
-  { value: '--', label: 'RFQs activos', highlight: true },
-  { value: '--', label: 'RFQs / mes', highlight: false },
-  { value: '--', label: 'Tokens hoy', highlight: false },
-  { value: '--', label: 'Storage', highlight: false },
+  { value: '--', label: 'RFQs / mes', highlight: true },
+  { value: '--', label: 'RFQs / semana', highlight: false },
+  { value: '--', label: 'Tokens / mes', highlight: false },
+  { value: '--', label: 'Por expirar', highlight: false },
 ];
 
-// Misma abreviación compacta para números grandes (73042 -> 73k)
+const SERVICIO_LABEL: Record<string, string> = {
+  serpapi: 'SerpAPI',
+  removebg: 'Remove.bg',
+  google_cse: 'Google CSE',
+  supabase: 'Storage',
+};
+
+// Abreviación compacta para números grandes (73042 -> 73k)
 function compact(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
@@ -32,33 +40,68 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
 
   useEffect(() => {
     async function fetchKpis() {
-      // Mismas fuentes que el DashboardPanel
-      const { count: activos } = await supabase
-        .from('rfqs')
-        .select('id', { count: 'exact', head: true })
-        .neq('estado', 'publicado');
-
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
+      const startOfWeek = new Date();
+      startOfWeek.setDate(startOfWeek.getDate() - 7);
+
+      // RFQs del mes y de la semana
       const { count: mes } = await supabase
         .from('rfqs')
         .select('id', { count: 'exact', head: true })
         .gte('created_at', startOfMonth.toISOString());
+      const { count: semana } = await supabase
+        .from('rfqs')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', startOfWeek.toISOString());
 
+      // Tokens del mes: sumar output de los jobs completados del mes
+      const { data: jobs } = await supabase
+        .from('jobs')
+        .select('output')
+        .eq('estado', 'completado')
+        .gte('created_at', startOfMonth.toISOString());
+      let tokensMes = 0;
+      for (const j of (jobs || [])) {
+        const o = (j.output || {}) as Record<string, number>;
+        tokensMes += Number(o.tokens_total ?? (Number(o.tokens_input || 0) + Number(o.tokens_output || 0)));
+      }
+
+      // Recurso más cercano a expirar: menor % de cuota restante
       const { data: res } = await supabase
         .from('resource_status')
-        .select('servicio, metrica, valor')
-        .in('servicio', ['anthropic', 'supabase']);
+        .select('servicio, metrica, valor, limite, estado');
 
-      const tokens = res?.find(r => r.servicio === 'anthropic' && r.metrica === 'tokens_hoy')?.valor;
-      const storage = res?.find(r => r.servicio === 'supabase' && r.metrica === 'storage_gb')?.valor;
+      const candidatos: { servicio: string; pct: number; restante: number }[] = [];
+      const find = (s: string, m: string) => res?.find(r => r.servicio === s && r.metrica === m);
+
+      const serp = find('serpapi', 'busquedas_restantes');
+      if (serp?.valor != null && serp.limite) candidatos.push({ servicio: 'serpapi', pct: serp.valor / serp.limite, restante: serp.valor });
+
+      const rb = find('removebg', 'creditos_restantes');
+      if (rb?.valor != null) {
+        // Cuenta de pago sin límite mensual: estimar urgencia por estado
+        const pct = rb.estado === 'critical' ? 0.02 : rb.estado === 'warning' ? 0.15 : 1;
+        candidatos.push({ servicio: 'removebg', pct, restante: rb.valor });
+      }
+
+      const gcse = find('google_cse', 'llamadas_hoy');
+      if (gcse?.valor != null && gcse.limite) candidatos.push({ servicio: 'google_cse', pct: (gcse.limite - gcse.valor) / gcse.limite, restante: gcse.limite - gcse.valor });
+
+      const stg = find('supabase', 'storage_gb');
+      if (stg?.valor != null && stg.limite) candidatos.push({ servicio: 'supabase', pct: (stg.limite - stg.valor) / stg.limite, restante: stg.limite - stg.valor });
+
+      const peor = candidatos.sort((a, b) => a.pct - b.pct)[0];
+      const expirarValue = peor ? compact(peor.restante) : '--';
+      const expirarLabel = peor ? SERVICIO_LABEL[peor.servicio] || peor.servicio : 'Por expirar';
+      const expirarColor = !peor ? undefined : peor.pct <= 0.05 ? '#f87171' : peor.pct <= 0.2 ? '#fbbf24' : '#10b981';
 
       setKpis([
-        { value: activos != null ? String(activos) : '--', label: 'RFQs activos', highlight: true },
-        { value: mes != null ? String(mes) : '--', label: 'RFQs / mes', highlight: false },
-        { value: tokens != null ? compact(tokens) : '--', label: 'Tokens hoy', highlight: false },
-        { value: storage != null ? `${storage.toFixed(2)} GB` : '--', label: 'Storage', highlight: false },
+        { value: mes != null ? String(mes) : '--', label: 'RFQs / mes', highlight: true },
+        { value: semana != null ? String(semana) : '--', label: 'RFQs / semana', highlight: false },
+        { value: tokensMes > 0 ? compact(tokensMes) : '--', label: 'Tokens / mes', highlight: false },
+        { value: expirarValue, label: expirarLabel, highlight: false, color: expirarColor },
       ]);
     }
     fetchKpis();
@@ -83,9 +126,12 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
           </button>
         </div>
         <div className="grid grid-cols-2 gap-1.5">
-          {kpis.map((kpi) => (
-            <div key={kpi.label} className="bg-brain-card rounded-md px-2 py-2">
-              <div className={`text-[14px] font-semibold ${kpi.highlight ? 'text-brain-accent' : 'text-white'}`}>
+          {kpis.map((kpi, i) => (
+            <div key={i} className="bg-brain-card rounded-md px-2 py-2">
+              <div
+                className={`text-[14px] font-semibold ${kpi.color ? '' : kpi.highlight ? 'text-brain-accent' : 'text-white'}`}
+                style={kpi.color ? { color: kpi.color } : undefined}
+              >
                 {kpi.value}
               </div>
               <div className="text-[9px] text-[#666] mt-0.5">{kpi.label}</div>
