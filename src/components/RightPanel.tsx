@@ -110,22 +110,18 @@ function AgentsSection() {
 
       if (!jobs) return;
 
+      // Un agente solo se "enciende" si está EN USO ahora (job pendiente/corriendo)
+      // o si acaba de terminar (< 2 min). El resto del tiempo está en espera.
+      const now = Date.now();
+      const RECENT_MS = 2 * 60 * 1000;
       const statusMap: Record<string, AgentStatus> = {};
       for (const def of AGENT_DEFS) {
         const agentJobs = jobs.filter((j) => j.agente === def.key);
-        if (agentJobs.length === 0) {
-          statusMap[def.key] = 'waiting';
-        } else {
-          const hasRunning = agentJobs.some((j) => j.estado === 'pendiente' || j.estado === 'corriendo');
-          const hasCompleted = agentJobs.some((j) => j.estado === 'completado');
-          if (hasRunning) {
-            statusMap[def.key] = 'running';
-          } else if (hasCompleted) {
-            statusMap[def.key] = 'ok';
-          } else {
-            statusMap[def.key] = 'waiting';
-          }
-        }
+        const hasRunning = agentJobs.some((j) => j.estado === 'pendiente' || j.estado === 'corriendo');
+        const justFinished = agentJobs.some((j) =>
+          j.estado === 'completado' && j.finished_at && (now - new Date(j.finished_at).getTime()) < RECENT_MS
+        );
+        statusMap[def.key] = hasRunning ? 'running' : justFinished ? 'ok' : 'waiting';
       }
 
       setAgents(AGENT_DEFS.map((d) => ({ ...d, status: statusMap[d.key] || 'waiting' })));
