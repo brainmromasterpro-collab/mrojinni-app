@@ -91,6 +91,7 @@ interface ResourceRow {
   valor_texto: string | null;
   limite: number | null;
   estado: string | null;
+  actualizado_en?: string | null;
 }
 
 interface AgentStats {
@@ -105,6 +106,44 @@ interface Notification {
   tipo: string;
   created_at: string;
 }
+
+interface LogEntry {
+  agente: string;
+  estado: string;
+  created_at: string;
+  finished_at: string | null;
+  error: string | null;
+}
+
+interface Falla {
+  servicio: string;
+  metrica: string;
+  estado: string;
+  mensaje: string;
+  actualizado_en: string | null;
+}
+
+const SERVICIO_LABEL: Record<string, string> = {
+  serpapi: 'SerpAPI',
+  removebg: 'Remove.bg',
+  anthropic: 'Anthropic (Claude)',
+  google_cse: 'Google CSE',
+  supabase: 'Supabase',
+  railway: 'Railway',
+  github: 'GitHub',
+  '1crm': '1CRM',
+};
+
+const AGENTE_LABEL: Record<string, string> = {
+  lector: 'Lector',
+  buscador: 'Buscador',
+  imagen: 'Imagen',
+  ficha: 'Ficha',
+  publicador: 'Publicador',
+  chat: 'Chat',
+  notificador: 'Notificador',
+  monitor: 'Monitor',
+};
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -121,6 +160,9 @@ export default function DashboardPanel() {
   const [rfqsActivos, setRfqsActivos] = useState<number | null>(null);
   const [rfqsUrgentes, setRfqsUrgentes] = useState<number | null>(null);
   const [rfqsMes, setRfqsMes] = useState<number | null>(null);
+  const [rfqsSemana, setRfqsSemana] = useState<number | null>(null);
+  const [rfqsTotal, setRfqsTotal] = useState<number | null>(null);
+  const [globalLog, setGlobalLog] = useState<LogEntry[]>([]);
   const [agentStats, setAgentStats] = useState<AgentStats[]>([]);
   const [completadosHoy, setCompletadosHoy] = useState<number | null>(null);
   const [totalCorriendo, setTotalCorriendo] = useState<number | null>(null);
@@ -141,11 +183,12 @@ export default function DashboardPanel() {
       fetchJobs(),
       fetchNotifications(),
       fetchExchangeRate(),
+      fetchGlobalLog(),
     ]);
   }
 
   async function fetchResources() {
-    const { data } = await supabase.from('resource_status').select('servicio, metrica, valor, valor_texto, limite, estado');
+    const { data } = await supabase.from('resource_status').select('servicio, metrica, valor, valor_texto, limite, estado, actualizado_en');
     if (data) setResources(data);
   }
 
@@ -171,6 +214,36 @@ export default function DashboardPanel() {
       .select('id', { count: 'exact', head: true })
       .gte('created_at', startOfMonth.toISOString());
     setRfqsMes(mes ?? 0);
+
+    const startOfWeek = new Date();
+    startOfWeek.setDate(startOfWeek.getDate() - 7);
+    const { count: semana } = await supabase
+      .from('rfqs')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', startOfWeek.toISOString());
+    setRfqsSemana(semana ?? 0);
+
+    const { count: total } = await supabase
+      .from('rfqs')
+      .select('id', { count: 'exact', head: true });
+    setRfqsTotal(total ?? 0);
+  }
+
+  async function fetchGlobalLog() {
+    const { data } = await supabase
+      .from('jobs')
+      .select('agente, estado, created_at, finished_at, output')
+      .order('created_at', { ascending: false })
+      .limit(40);
+    if (data) {
+      setGlobalLog(data.map((j: { agente: string; estado: string; created_at: string; finished_at: string | null; output: Record<string, unknown> | null }) => ({
+        agente: j.agente,
+        estado: j.estado,
+        created_at: j.created_at,
+        finished_at: j.finished_at,
+        error: (j.output && typeof j.output.error === 'string') ? j.output.error : null,
+      })));
+    }
   }
 
   async function fetchJobs() {
@@ -252,6 +325,28 @@ export default function DashboardPanel() {
   const agenteLimite = agentesActivos?.limite ?? 5;
   const agenteValor = agentesActivos?.valor ?? 0;
 
+  // Fallas: cualquier recurso en estado critical/warning, o con un texto de error.
+  // El monitor escribe valor_texto="Error: ..." y estado="critical" cuando un check falla.
+  const fallas: Falla[] = resources
+    .filter(r => r.estado === 'critical' || r.estado === 'warning')
+    .map(r => {
+      const esError = (r.valor_texto || '').toLowerCase().startsWith('error');
+      const mensaje = esError
+        ? (r.valor_texto || 'Error')
+        : r.estado === 'critical'
+          ? 'Cuota casi agotada'
+          : 'Cuota baja';
+      return {
+        servicio: r.servicio,
+        metrica: r.metrica,
+        estado: r.estado || 'warning',
+        mensaje,
+        actualizado_en: r.actualizado_en ?? null,
+      };
+    })
+    // priorizar critical primero
+    .sort((a, b) => (a.estado === 'critical' ? -1 : 1) - (b.estado === 'critical' ? -1 : 1));
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-[#0d0d0d] overflow-y-auto scrollbar-light">
       {/* Header */}
@@ -325,6 +420,16 @@ export default function DashboardPanel() {
           </div>
         </section>
 
+        {/* Section: RFQs creados */}
+        <section>
+          <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-3">RFQs Creados</p>
+          <div className="grid grid-cols-3 gap-3">
+            <RfqCountCard label="Esta semana" value={rfqsSemana} sub="Últimos 7 días" color="#10b981" />
+            <RfqCountCard label="Este mes" value={rfqsMes} sub="Desde el día 1" color="#06b6d4" />
+            <RfqCountCard label="Histórico" value={rfqsTotal} sub="Todos los tiempos" color="#8b5cf6" />
+          </div>
+        </section>
+
         {/* Section: API Usage Breakdown */}
         <section>
           <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-3">Uso de APIs - Ultimos 14 dias</p>
@@ -362,6 +467,30 @@ export default function DashboardPanel() {
                 <span>{serpLimite}/mes</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* Section: Fallas */}
+        <section>
+          <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-3">
+            Fallas de Proveedores {fallas.length > 0 && <span className="text-[#ef4444]">({fallas.length})</span>}
+          </p>
+          <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl divide-y divide-[#1f1f1f]">
+            {fallas.length > 0 ? fallas.map((f, i) => (
+              <div key={i} className="px-4 py-2.5 flex items-center gap-3">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.estado === 'critical' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                <span className="text-[11px] font-medium flex-shrink-0 w-32" style={{ color: f.estado === 'critical' ? '#f87171' : '#fbbf24' }}>
+                  {SERVICIO_LABEL[f.servicio] || f.servicio}
+                </span>
+                <span className="text-[11px] text-[#999] flex-1 truncate">{f.mensaje}</span>
+                {f.actualizado_en && <span className="text-[9px] text-[#555] flex-shrink-0">{timeAgo(f.actualizado_en)}</span>}
+              </div>
+            )) : (
+              <div className="px-4 py-2.5 flex items-center gap-2 text-[11px] text-[#10b981]">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Todos los proveedores operando normalmente
+              </div>
+            )}
           </div>
         </section>
 
@@ -500,7 +629,48 @@ export default function DashboardPanel() {
             </div>
           </div>
         </section>
+
+        {/* Section: Log global */}
+        <section className="pb-4">
+          <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-3">Log Global</p>
+          <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl divide-y divide-[#1f1f1f] max-h-80 overflow-y-auto scrollbar-light">
+            {globalLog.length > 0 ? globalLog.map((entry, i) => {
+              const dotColor = entry.estado === 'fallido' || entry.estado === 'error' ? 'bg-red-500'
+                : entry.estado === 'corriendo' ? 'bg-cyan-500'
+                : entry.estado === 'pendiente' ? 'bg-amber-500'
+                : 'bg-emerald-500';
+              return (
+                <div key={i} className="px-4 py-2 flex items-center gap-3 font-mono">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
+                  <span className="text-[10px] text-[#666] flex-shrink-0 w-[70px]">{timeAgo(entry.created_at)}</span>
+                  <span className="text-[10px] text-[#ccc] flex-shrink-0 w-24">{AGENTE_LABEL[entry.agente] || entry.agente}</span>
+                  <span className={`text-[10px] flex-shrink-0 w-20 ${
+                    entry.estado === 'fallido' ? 'text-red-400'
+                    : entry.estado === 'completado' ? 'text-emerald-400'
+                    : 'text-[#888]'
+                  }`}>{entry.estado}</span>
+                  <span className="text-[10px] text-[#777] flex-1 truncate">{entry.error || ''}</span>
+                </div>
+              );
+            }) : (
+              <div className="px-4 py-2.5 text-[11px] text-[#555]">Sin registros</div>
+            )}
+          </div>
+        </section>
       </div>
+    </div>
+  );
+}
+
+function RfqCountCard({ label, value, sub, color }: { label: string; value: number | null; sub: string; color: string }) {
+  return (
+    <div className="bg-[#141414] border border-[#1f1f1f] rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-2">
+        <Package className="w-3.5 h-3.5" style={{ color }} />
+        <span className="text-[10px] text-[#888]">{label}</span>
+      </div>
+      <div className="text-[24px] font-bold text-white leading-none">{value != null ? value : '--'}</div>
+      <p className="text-[9px] text-[#555] mt-1.5">{sub}</p>
     </div>
   );
 }
