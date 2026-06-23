@@ -159,12 +159,13 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
           return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
         });
 
-      // Un agente se "enciende" solo si está EN USO ahora o acaba de terminar.
-      // Un job pendiente/corriendo solo cuenta si es RECIENTE: hay jobs zombie
-      // que quedaron en "corriendo" por días tras un crash y no son uso real.
+      // Un agente se enciende SOLO mientras está corriendo ahora mismo.
+      // Un job pendiente/corriendo solo cuenta si es RECIENTE (< 15 min): hay
+      // jobs zombie que quedaron en "corriendo" tras un crash y no son uso real.
+      // Nota: NO encendemos por "recién terminó" — eso hacía que buscador y
+      // publicador salieran verdes al mismo tiempo que corría imagen.
       const now = Date.now();
-      const RECENT_MS = 2 * 60 * 1000;       // "ok" tras terminar
-      const RUNNING_FRESH_MS = 15 * 60 * 1000; // máximo que un job activo es creíble
+      const RUNNING_FRESH_MS = 15 * 60 * 1000;
       const list: AgentInfo[] = keys.map((key) => {
         const aj = jobs.filter((j) => j.agente === key);
         const hasRunning = aj.some((j) => {
@@ -172,10 +173,7 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
           const ts = j.started_at || j.created_at;
           return ts != null && (now - new Date(ts).getTime()) < RUNNING_FRESH_MS;
         });
-        const justFinished = aj.some((j) =>
-          j.estado === 'completado' && j.finished_at && (now - new Date(j.finished_at).getTime()) < RECENT_MS
-        );
-        return { name: agentLabel(key), key, status: hasRunning ? 'running' : justFinished ? 'ok' : 'waiting' };
+        return { name: agentLabel(key), key, status: hasRunning ? 'running' : 'waiting' };
       });
 
       if (!cancelled) setAgents(list);
