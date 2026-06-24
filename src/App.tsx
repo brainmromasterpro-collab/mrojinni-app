@@ -9,9 +9,12 @@ import AgentsPanel from './components/AgentsPanel';
 import InfraPanel from './components/InfraPanel';
 import DashboardPanel from './components/DashboardPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
+import LoginPage from './components/LoginPage';
 import { supabase } from './lib/supabase';
 import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache, clearMessagesCache, deleteStreamMessages } from './lib/storage';
 import type { Stream, Message } from './lib/types';
+
+const ALLOWED_EMAIL = 'brain.mromasterpro@gmail.com';
 
 const DEMO_STREAM_1 = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const DEMO_STREAM_2 = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
@@ -36,6 +39,26 @@ const demoStreams: Stream[] = [
 const demoMessages: Message[] = [];
 
 export default function App() {
+  const [session, setSession] = useState<any>(undefined);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) return null;
+
+  const userEmail = session?.user?.email;
+  if (!session || userEmail !== ALLOWED_EMAIL) {
+    if (session && userEmail !== ALLOWED_EMAIL) supabase.auth.signOut();
+    return <LoginPage />;
+  }
+
+  return <AppContent />;
+}
+
+function AppContent() {
   const [streams, setStreams] = useState<Stream[]>(demoStreams);
   const [activeStreamId, setActiveStreamId] = useState<string>(DEMO_STREAM_1);
   const [messages, setMessagesRaw] = useState<Message[]>(demoMessages);
