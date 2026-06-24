@@ -153,8 +153,6 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
       {/* Logs */}
       <NavSection title="Logs">
         <NavItem icon={Link2} label="Activity log" id="activity" active={activeNav === 'activity'} onClick={onNavSelect} />
-        <NavSub>Que paso - quien hizo que</NavSub>
-        <NavSub>Pendientes por persona</NavSub>
       </NavSection>
 
       <Divider />
