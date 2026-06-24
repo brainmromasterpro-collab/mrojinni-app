@@ -141,7 +141,12 @@ export default function AgentsPanel() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [streams, setStreams] = useState<StreamRow[]>([]);
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const { recentJobs, agentStatus } = useAgentMonitor();
+
+  function toggleSection(key: string) {
+    setOpenSection((prev) => (prev === key ? null : key));
+  }
 
   useEffect(() => {
     async function loadStreams() {
@@ -197,159 +202,145 @@ export default function AgentsPanel() {
     );
   }
 
+  const sections = [
+    { key: 'agentes', label: 'Agentes' },
+    { key: 'asignacion', label: 'Asignación por stream' },
+    { key: 'jobs', label: 'Jobs recientes' },
+  ];
+
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-brain-surface">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-brain-border bg-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#059669]/10 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-[#059669]" />
-            </div>
-            <div>
-              <h2 className="text-[15px] font-semibold text-gray-900">Agentes</h2>
-              <p className="text-[11px] text-[#888]">Configura el comportamiento de cada agente del pipeline</p>
-            </div>
+      <div className="px-5 py-4 border-b border-brain-border bg-white flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-[#059669]/10 flex items-center justify-center">
+            <Bot className="w-3.5 h-3.5 text-[#059669]" />
           </div>
-          <button
-            onClick={() => setCreatingNew(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-white bg-[#059669] rounded-lg hover:bg-[#047857] transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Nuevo agente
-          </button>
+          <h2 className="text-[14px] font-semibold text-gray-900">Config</h2>
         </div>
+        <button
+          onClick={() => setCreatingNew(true)}
+          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium text-white bg-[#059669] rounded-lg hover:bg-[#047857] transition-colors"
+        >
+          <Plus className="w-3 h-3" />
+          Nuevo
+        </button>
       </div>
 
-      {/* Pipeline visual */}
-      <div className="px-6 pt-5 pb-2">
-        <div className="flex items-center gap-1 max-w-2xl">
-          {liveAgents.map((agent, i) => (
-            <div key={agent.id} className="flex items-center gap-1">
-              <span className={`text-[9px] font-medium px-2 py-0.5 rounded-full ${
-                agent.active
-                  ? agent.status === 'ok' ? 'bg-emerald-100 text-emerald-700'
-                    : agent.status === 'running' ? 'bg-amber-100 text-amber-700'
-                    : 'bg-gray-100 text-gray-500'
-                  : 'bg-gray-100 text-gray-400 line-through'
-              }`}>
-                {agent.name}
-              </span>
-              {i < liveAgents.length - 1 && (
-                <span className="text-[#ccc] text-[10px]">→</span>
+      {/* Accordion sections */}
+      <div className="flex-1 overflow-y-auto scrollbar-light">
+        {sections.map((section) => {
+          const isOpen = openSection === section.key;
+          return (
+            <div key={section.key} className="border-b border-brain-border">
+              <button
+                onClick={() => toggleSection(section.key)}
+                className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-white/60 transition-colors"
+              >
+                <span className="text-[12px] font-semibold text-gray-700 uppercase tracking-wider">
+                  {section.label}
+                </span>
+                <span className={`text-[#aaa] text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▾</span>
+              </button>
+
+              {isOpen && (
+                <div className="px-5 pb-5">
+                  {/* ── Agentes ── */}
+                  {section.key === 'agentes' && (
+                    <div className="space-y-2">
+                      {liveAgents.map((agent) => (
+                        <AgentCard
+                          key={agent.id}
+                          agent={agent}
+                          onEdit={() => setEditingId(agent.id)}
+                          onToggle={() => handleToggleActive(agent.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Asignación por stream ── */}
+                  {section.key === 'asignacion' && (
+                    <div className="space-y-3">
+                      {streams.length === 0 && (
+                        <p className="text-xs text-[#888]">No hay streams aún</p>
+                      )}
+                      {streams.map((stream) => (
+                        <div key={stream.id} className="bg-white border border-brain-border rounded-xl p-3.5">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[12px] font-semibold text-gray-900">{stream.nombre}</span>
+                            <span className="text-[9px] text-[#aaa] bg-brain-surface px-1.5 py-0.5 rounded">
+                              {stream.tipo || 'general'}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {liveAgents.map((agent) => {
+                              const assigned = stream.agentes.includes(agent.id);
+                              return (
+                                <button
+                                  key={agent.id}
+                                  onClick={() => toggleAgentForStream(stream.id, agent.id)}
+                                  className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                                    assigned
+                                      ? 'bg-[#059669]/10 border-[#059669]/40 text-[#059669]'
+                                      : 'bg-white border-brain-border text-[#999] hover:border-[#059669]/30'
+                                  }`}
+                                >
+                                  {assigned && <Check className="w-3 h-3" />}
+                                  {agent.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {stream.agentes.length === 0 && (
+                            <p className="text-[10px] text-[#bbb] mt-2">Sin agentes asignados</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ── Jobs recientes ── */}
+                  {section.key === 'jobs' && (
+                    <div className="space-y-2 max-h-80 overflow-y-auto scrollbar-light">
+                      {recentJobs.length === 0 && (
+                        <p className="text-xs text-[#888]">Sin actividad reciente</p>
+                      )}
+                      {recentJobs.map((job) => (
+                        <div key={job.id} className="bg-white border border-brain-border rounded-lg p-3 text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="font-medium capitalize text-gray-900">{job.agente}</span>
+                            <span className={`px-2 py-0.5 rounded-full font-medium ${
+                              job.estado === 'completado' ? 'bg-emerald-100 text-emerald-700' :
+                              job.estado === 'corriendo'  ? 'bg-blue-100 text-blue-700' :
+                              job.estado === 'fallido'    ? 'bg-red-100 text-red-700' :
+                              job.estado === 'foto_pendiente' ? 'bg-amber-100 text-amber-700' :
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {job.estado}
+                            </span>
+                          </div>
+                          {job.rfqs && (
+                            <p className="text-[#888]">{job.rfqs.marca} — {job.rfqs.modelo}</p>
+                          )}
+                          {job.error && (
+                            <p className="text-red-500 mt-1 truncate" title={job.error}>{job.error}</p>
+                          )}
+                          <p className="text-[#aaa] mt-1">
+                            {new Date(job.created_at).toLocaleString('es-MX', {
+                              month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Agent list */}
-      <div className="flex-1 overflow-y-auto p-6 pt-3 scrollbar-light">
-        <div className="grid gap-3 max-w-2xl">
-          {liveAgents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              onEdit={() => setEditingId(agent.id)}
-              onToggle={() => handleToggleActive(agent.id)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* Asignación de agentes por stream */}
-      <div className="px-6 pb-2">
-        <div className="max-w-2xl">
-          <h3 className="text-sm font-semibold text-[#888] mb-1 uppercase tracking-wider">
-            Asignación por stream
-          </h3>
-          <p className="text-[11px] text-[#888] mb-3">
-            Marca qué agentes atienden cada stream. El panel derecho de ese stream mostrará solo esos agentes.
-          </p>
-          <div className="space-y-3">
-            {streams.length === 0 && (
-              <p className="text-xs text-[#888]">No hay streams aún</p>
-            )}
-            {streams.map((stream) => (
-              <div key={stream.id} className="bg-white border border-brain-border rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2.5">
-                  <span className="text-[13px] font-semibold text-gray-900">{stream.nombre}</span>
-                  <span className="text-[9px] text-[#aaa] bg-brain-surface px-1.5 py-0.5 rounded">
-                    {stream.tipo || 'general'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {liveAgents.map((agent) => {
-                    const assigned = stream.agentes.includes(agent.id);
-                    return (
-                      <button
-                        key={agent.id}
-                        onClick={() => toggleAgentForStream(stream.id, agent.id)}
-                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors ${
-                          assigned
-                            ? 'bg-[#059669]/10 border-[#059669]/40 text-[#059669]'
-                            : 'bg-white border-brain-border text-[#999] hover:border-[#059669]/30'
-                        }`}
-                      >
-                        {assigned && <Check className="w-3 h-3" />}
-                        {agent.name}
-                      </button>
-                    );
-                  })}
-                </div>
-                {stream.agentes.length === 0 && (
-                  <p className="text-[10px] text-[#bbb] mt-2">Sin agentes asignados — el panel mostrará los que tengan actividad</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Jobs Recientes */}
-      <div className="px-6 pb-6">
-        <div className="max-w-2xl">
-          <h3 className="text-sm font-semibold text-[#888] mb-3 uppercase tracking-wider">
-            Jobs Recientes
-          </h3>
-          <div className="space-y-2 max-h-96 overflow-y-auto scrollbar-light">
-            {recentJobs.length === 0 && (
-              <p className="text-xs text-[#888]">Sin actividad reciente</p>
-            )}
-            {recentJobs.map((job) => (
-              <div key={job.id} className="bg-white border border-brain-border rounded-lg p-3 text-xs">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium capitalize text-gray-900">{job.agente}</span>
-                  <span className={`px-2 py-0.5 rounded-full font-medium ${
-                    job.estado === 'completado' ? 'bg-emerald-100 text-emerald-700' :
-                    job.estado === 'corriendo'  ? 'bg-blue-100 text-blue-700' :
-                    job.estado === 'fallido'    ? 'bg-red-100 text-red-700' :
-                    job.estado === 'foto_pendiente' ? 'bg-amber-100 text-amber-700' :
-                    'bg-gray-100 text-gray-500'
-                  }`}>
-                    {job.estado}
-                  </span>
-                </div>
-                {job.rfqs && (
-                  <p className="text-[#888]">
-                    {job.rfqs.marca} — {job.rfqs.modelo}
-                  </p>
-                )}
-                {job.error && (
-                  <p className="text-red-500 mt-1 truncate" title={job.error}>
-                    {job.error}
-                  </p>
-                )}
-                <p className="text-[#aaa] mt-1">
-                  {new Date(job.created_at).toLocaleString('es-MX', {
-                    month: 'short', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit'
-                  })}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
+          );
+        })}
       </div>
 
       {/* Config Modal */}

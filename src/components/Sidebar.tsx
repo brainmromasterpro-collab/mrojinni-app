@@ -162,14 +162,8 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
       {/* Config */}
       <NavSection title="Config">
         <NavItem icon={Plug} label="Connectors" id="connectors" active={activeNav === 'connectors'} onClick={onNavSelect} />
-        <NavSub>1CRM - Gmail - Drive</NavSub>
-        <NavSub>Remove.bg - Supabase</NavSub>
         <NavItem icon={Bot} label="Agentes" id="agentes" active={activeNav === 'agentes'} onClick={onNavSelect} />
-        <NavSub>Lector - Buscador</NavSub>
-        <NavSub>Imagen - Ficha - Publicador</NavSub>
         <NavItem icon={Cloud} label="Infraestructura" id="infra" active={activeNav === 'infra'} onClick={onNavSelect} />
-        <NavSub>Railway - Hostinger</NavSub>
-        <NavSub>Modelos IA</NavSub>
       </NavSection>
     </aside>
   );
