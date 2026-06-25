@@ -505,7 +505,6 @@ function AppContent() {
     if (lastSearch && Date.now() - lastSearch < 300000) return;
 
     const producto = `${marca} ${modelo}`;
-    if (!bulkId && widgetExistsFor(undefined, producto)) return;
 
     recentSearchesRef.current.set(searchKey, Date.now());
 
