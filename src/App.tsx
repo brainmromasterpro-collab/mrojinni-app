@@ -47,7 +47,11 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  if (session === undefined) return null;
+  if (session === undefined) return (
+    <div className="min-h-screen bg-brain-dark flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-brain-accent border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   const userEmail = session?.user?.email;
   if (!session || userEmail !== ALLOWED_EMAIL) {
