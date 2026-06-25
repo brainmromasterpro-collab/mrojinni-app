@@ -117,6 +117,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   const [selected, setSelected] = useState<Map<string, string>>(new Map());
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const busyRef = useRef(false);
+  const mutatingRef = useRef(false);
 
   const stats = useMemo(() => {
     const total = rfqs.length;
@@ -138,14 +139,23 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
     fetchRfqs();
     const retryTimeout = setTimeout(fetchRfqs, 2000);
     const pollInterval = setInterval(fetchRfqs, 4000);
+
+    // Realtime: re-fetch instantly when rfqs or opciones change
+    const channel = supabase
+      .channel(`bulk-${bulkId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rfqs', filter: `bulk_id=eq.${bulkId}` }, () => fetchRfqs())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'opciones' }, () => fetchRfqs())
+      .subscribe();
+
     return () => {
       clearTimeout(retryTimeout);
       clearInterval(pollInterval);
+      supabase.removeChannel(channel);
     };
   }, [bulkId]);
 
   async function fetchRfqs() {
-    if (busyRef.current) return;
+    if (mutatingRef.current) return;
 
     const { data, error } = await supabase
       .from('rfqs')
@@ -187,6 +197,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
   async function handlePublishBulk() {
     if (selected.size === 0) return;
+    mutatingRef.current = true;
     busyRef.current = true;
     setActionInProgress(true);
 
@@ -216,6 +227,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       setSelected(new Map());
       await fetchRfqs();
     } finally {
+      mutatingRef.current = false;
       busyRef.current = false;
       setActionInProgress(false);
     }
@@ -243,6 +255,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   }
 
   async function handlePublishIndividual(rfqId: string, opcionId: string) {
+    mutatingRef.current = true;
     busyRef.current = true;
     setPublishingIndividual(rfqId);
 
@@ -270,6 +283,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       });
       await fetchRfqs();
     } finally {
+      mutatingRef.current = false;
       busyRef.current = false;
       setPublishingIndividual(null);
     }
@@ -294,6 +308,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   }
 
   async function handleRetryImage(rfqId: string) {
+    mutatingRef.current = true;
     busyRef.current = true;
     setRfqs(prev => prev.map(r =>
       r.id === rfqId ? { ...r, estado: 'procesando_imagen' } : r
@@ -313,6 +328,7 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
 
       await fetchRfqs();
     } finally {
+      mutatingRef.current = false;
       busyRef.current = false;
     }
   }
