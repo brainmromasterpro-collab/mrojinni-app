@@ -1,5 +1,6 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, LogOut } from 'lucide-react';
 import NotificationBell from './NotificationBell';
+import { supabase } from '../lib/supabase';
 
 interface TopBarProps {
   streams: { id: string; nombre: string }[];
@@ -41,6 +42,13 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
         <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 transition-colors whitespace-nowrap">
           <RefreshCw className="w-3 h-3" />
           Connect streams
+        </button>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-[#666] border border-brain-border-dark hover:text-[#aaa] transition-colors"
+          title="Cerrar sesión"
+        >
+          <LogOut className="w-3 h-3" />
         </button>
       </div>
     </header>
