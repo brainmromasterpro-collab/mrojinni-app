@@ -14,7 +14,10 @@ import { supabase } from './lib/supabase';
 import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache, clearMessagesCache, deleteStreamMessages } from './lib/storage';
 import type { Stream, Message } from './lib/types';
 
-const ALLOWED_EMAIL = 'brain.mromasterpro@gmail.com';
+const ALLOWED_EMAILS = new Set([
+  'brain.mromasterpro@gmail.com',
+  'thejinni.app@gmail.com',
+]);
 
 const DEMO_STREAM_1 = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 const DEMO_STREAM_2 = 'b2c3d4e5-f6a7-8901-bcde-f12345678901';
@@ -54,8 +57,8 @@ export default function App() {
   );
 
   const userEmail = session?.user?.email;
-  if (!session || userEmail !== ALLOWED_EMAIL) {
-    if (session && userEmail !== ALLOWED_EMAIL) supabase.auth.signOut();
+  if (!session || !ALLOWED_EMAILS.has(userEmail ?? '')) {
+    if (session && !ALLOWED_EMAILS.has(userEmail ?? '')) supabase.auth.signOut();
     return <LoginPage />;
   }
 
