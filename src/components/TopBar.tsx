@@ -1,4 +1,4 @@
-import { RefreshCw, LogOut } from 'lucide-react';
+import { RefreshCw, LogOut, X } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../lib/supabase';
 
@@ -7,9 +7,10 @@ interface TopBarProps {
   activeStreamId: string | null;
   onSelectStream: (id: string) => void;
   onCreateStream: () => void;
+  onDeleteStream: (id: string) => void;
 }
 
-export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream }: TopBarProps) {
+export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream }: TopBarProps) {
   return (
     <header className="h-topbar bg-brain-dark flex items-center gap-2 px-4 border-b border-brain-border-dark flex-shrink-0">
       <span className="text-white text-[13px] font-semibold tracking-wide mr-3 opacity-90 flex items-center gap-1.5">
@@ -17,17 +18,26 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
       </span>
 
       {streams.map((s) => (
-        <button
+        <div
           key={s.id}
-          onClick={() => onSelectStream(s.id)}
-          className={`px-3 py-1.5 text-[11px] rounded-md border whitespace-nowrap transition-all ${
+          className={`group relative flex items-center gap-1 px-3 py-1.5 text-[11px] rounded-md border whitespace-nowrap transition-all cursor-pointer ${
             s.id === activeStreamId
               ? 'bg-brain-border-dark text-white border-[#555]'
               : 'bg-brain-card text-[#aaa] border-brain-border-dark hover:text-white'
           }`}
+          onClick={() => onSelectStream(s.id)}
         >
-          {s.nombre}
-        </button>
+          <span>{s.nombre}</span>
+          {streams.length > 1 && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDeleteStream(s.id); }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 rounded hover:text-red-400 text-[#888]"
+              title="Cerrar stream"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       ))}
 
       <button

@@ -1599,6 +1599,18 @@ function AppContent() {
     setActiveNav('chat');
   }
 
+  async function handleDeleteStream(id: string) {
+    if (streams.length <= 1) return; // siempre al menos un stream
+    await supabase.from('streams').delete().eq('id', id);
+    setStreams((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      if (activeStreamId === id) {
+        setActiveStreamId(next[next.length - 1]?.id ?? null);
+      }
+      return next;
+    });
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden">
       <TopBar
@@ -1606,6 +1618,7 @@ function AppContent() {
         activeStreamId={activeStreamId}
         onSelectStream={handleSelectStream}
         onCreateStream={handleCreateStream}
+        onDeleteStream={handleDeleteStream}
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} />
