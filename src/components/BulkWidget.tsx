@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { ChevronRight, Package, Loader2, CheckCircle2, AlertCircle, Search, Zap, Image as ImageIcon, Send, RotateCcw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -118,6 +118,48 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const busyRef = useRef(false);
   const mutatingRef = useRef(false);
+  const prevStatesRef = useRef<Map<string, string>>(new Map());
+
+  const playAlert = useCallback((type: 'search_done' | 'image_ready' | 'published') => {
+    try {
+      const ctx = new AudioContext();
+      const gain = ctx.createGain();
+      gain.connect(ctx.destination);
+
+      const sequences: Record<string, { freq: number; start: number; dur: number }[]> = {
+        search_done: [
+          { freq: 880, start: 0,    dur: 0.12 },
+          { freq: 1100, start: 0.14, dur: 0.12 },
+        ],
+        image_ready: [
+          { freq: 660,  start: 0,    dur: 0.1 },
+          { freq: 880,  start: 0.12, dur: 0.1 },
+          { freq: 1320, start: 0.24, dur: 0.18 },
+        ],
+        published: [
+          { freq: 523, start: 0,    dur: 0.1 },
+          { freq: 659, start: 0.12, dur: 0.1 },
+          { freq: 784, start: 0.24, dur: 0.1 },
+          { freq: 1046, start: 0.36, dur: 0.22 },
+        ],
+      };
+
+      sequences[type].forEach(({ freq, start, dur }) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        g.gain.setValueAtTime(0.18, ctx.currentTime + start);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + dur + 0.05);
+      });
+
+      setTimeout(() => ctx.close(), 2000);
+    } catch (_) {}
+  }, []);
 
   const stats = useMemo(() => {
     const total = rfqs.length;
@@ -155,7 +197,23 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       .order('created_at', { ascending: true });
 
     if (!error && data) {
-      setRfqs(data as RFQRow[]);
+      const newRfqs = data as RFQRow[];
+      const prev = prevStatesRef.current;
+      let searchDone = false, imageReady = false, published = false;
+      newRfqs.forEach(r => {
+        const oldEstado = prev.get(r.id);
+        const newEstado = r.estado ?? '';
+        if (oldEstado !== undefined && oldEstado !== newEstado) {
+          if (newEstado === 'busqueda_completa') searchDone = true;
+          if (newEstado === 'foto_lista')        imageReady = true;
+          if (newEstado === 'publicado')         published  = true;
+        }
+        prev.set(r.id, newEstado);
+      });
+      if (published)   playAlert('published');
+      else if (imageReady)  playAlert('image_ready');
+      else if (searchDone)  playAlert('search_done');
+      setRfqs(newRfqs);
     }
     setLoading(false);
   }
