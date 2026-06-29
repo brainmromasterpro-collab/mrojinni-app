@@ -1599,6 +1599,11 @@ function AppContent() {
     setActiveNav('chat');
   }
 
+  async function handleRenameStream(id: string, nombre: string) {
+    await supabase.from('streams').update({ nombre }).eq('id', id);
+    setStreams((prev) => prev.map((s) => s.id === id ? { ...s, nombre } : s));
+  }
+
   async function handleDeleteStream(id: string) {
     if (streams.length <= 1) return; // siempre al menos un stream
     await supabase.from('streams').delete().eq('id', id);
@@ -1619,6 +1624,7 @@ function AppContent() {
         onSelectStream={handleSelectStream}
         onCreateStream={handleCreateStream}
         onDeleteStream={handleDeleteStream}
+        onRenameStream={handleRenameStream}
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} />

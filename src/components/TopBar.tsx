@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { RefreshCw, LogOut, X } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../lib/supabase';
@@ -8,9 +9,27 @@ interface TopBarProps {
   onSelectStream: (id: string) => void;
   onCreateStream: () => void;
   onDeleteStream: (id: string) => void;
+  onRenameStream: (id: string, nombre: string) => void;
 }
 
-export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream }: TopBarProps) {
+export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream }: TopBarProps) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit(s: { id: string; nombre: string }, e: React.MouseEvent) {
+    e.stopPropagation();
+    setEditingId(s.id);
+    setEditValue(s.nombre);
+    setTimeout(() => { inputRef.current?.select(); }, 0);
+  }
+
+  function commitEdit(id: string) {
+    const trimmed = editValue.trim();
+    if (trimmed) onRenameStream(id, trimmed);
+    setEditingId(null);
+  }
+
   return (
     <header className="h-topbar bg-brain-dark flex items-center gap-2 px-4 border-b border-brain-border-dark flex-shrink-0">
       <span className="text-white text-[13px] font-semibold tracking-wide mr-3 opacity-90 flex items-center gap-1.5">
@@ -20,15 +39,34 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
       {streams.map((s) => (
         <div
           key={s.id}
-          className={`group relative flex items-center gap-1 px-3 py-1.5 text-[11px] rounded-md border whitespace-nowrap transition-all cursor-pointer ${
+          className={`group relative flex items-center gap-1 px-3 py-1.5 text-[11px] rounded-md border whitespace-nowrap transition-all ${
+            editingId === s.id ? 'cursor-text' : 'cursor-pointer'
+          } ${
             s.id === activeStreamId
               ? 'bg-brain-border-dark text-white border-[#555]'
               : 'bg-brain-card text-[#aaa] border-brain-border-dark hover:text-white'
           }`}
-          onClick={() => onSelectStream(s.id)}
+          onClick={() => editingId !== s.id && onSelectStream(s.id)}
+          onDoubleClick={(e) => startEdit(s, e)}
         >
-          <span>{s.nombre}</span>
-          {streams.length > 1 && (
+          {editingId === s.id ? (
+            <input
+              ref={inputRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => commitEdit(s.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitEdit(s.id);
+                if (e.key === 'Escape') setEditingId(null);
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-transparent outline-none border-none text-white w-24 text-[11px]"
+              autoFocus
+            />
+          ) : (
+            <span>{s.nombre}</span>
+          )}
+          {streams.length > 1 && editingId !== s.id && (
             <button
               onClick={(e) => { e.stopPropagation(); onDeleteStream(s.id); }}
               className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 rounded hover:text-red-400 text-[#888]"
