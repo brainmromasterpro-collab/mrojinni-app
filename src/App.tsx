@@ -80,6 +80,15 @@ function AppContent() {
   const recentSearchesRef = useRef<Map<string, number>>(new Map());
   const [bulkRfqIds, setBulkRfqIds] = useState<Set<string>>(new Set());
 
+  // Sync stream names from Supabase on mount (names may have been renamed)
+  useEffect(() => {
+    supabase.from('streams').select('id,nombre').then(({ data }) => {
+      if (!data) return;
+      const nameMap = new Map(data.map((r: { id: string; nombre: string }) => [r.id, r.nombre]));
+      setStreams((prev) => prev.map((s) => nameMap.has(s.id) ? { ...s, nombre: nameMap.get(s.id)! } : s));
+    });
+  }, []);
+
   const activeStream = streams.find((s) => s.id === activeStreamId) || null;
 
   // Centralized guard: checks if a RECENT widget already exists for this rfq_id OR producto
