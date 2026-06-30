@@ -358,7 +358,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
             if (msg.tipo === 'rfq-log') {
               return <RFQLogBubble key={msg.id} message={msg} />;
             }
-            return <MessageBubble key={msg.id} message={msg} />;
+            return <MessageBubble key={msg.id} message={msg} onSendMessage={onSendMessage} />;
           })}
 
         </div>
@@ -841,9 +841,10 @@ function SimpleMarkdown({ text }: { text: string }) {
   return <>{elements}</>;
 }
 
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, onSendMessage }: { message: Message; onSendMessage?: (text: string) => void }) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
+  const [decided, setDecided] = useState<string | null>(null);
 
   if (isUser) {
     return (
@@ -858,13 +859,49 @@ function MessageBubble({ message }: { message: Message }) {
     );
   }
 
+  const rawText = contenido.text || '';
+  const decisionMatch = rawText.match(/\[DECISION:\s*(.+?)\]/s);
+  const displayText = rawText.replace(/\[DECISION:\s*.+?\]/s, '').trimEnd();
+
+  function handleDecisionClick(answer: string) {
+    setDecided(answer);
+    onSendMessage?.(answer);
+  }
+
   return (
     <div className="flex items-start gap-3">
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brain-accent flex items-center justify-center">
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
-      <div className="max-w-[75%] px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
-        <SimpleMarkdown text={contenido.text || ''} />
+      <div className="max-w-[75%] space-y-2">
+        <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
+          <SimpleMarkdown text={displayText || rawText} />
+        </div>
+        {decisionMatch && (
+          <div className="bg-[#FFFBEA] border border-[#F0D88A] rounded-xl px-4 py-3">
+            <p className="text-[11px] font-semibold text-[#7A5000] mb-2.5">⚡ {decisionMatch[1].trim()}</p>
+            {decided ? (
+              <span className={`text-[11px] font-semibold ${decided === 'Sí' ? 'text-emerald-600' : 'text-red-500'}`}>
+                {decided === 'Sí' ? '✓ Aprobado' : '✗ Rechazado'}
+              </span>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleDecisionClick('Sí')}
+                  className="px-4 py-1.5 text-[11px] font-semibold text-emerald-700 border border-emerald-300 bg-emerald-50 rounded-lg hover:bg-emerald-100 transition-colors"
+                >
+                  ✓ Sí
+                </button>
+                <button
+                  onClick={() => handleDecisionClick('No')}
+                  className="px-4 py-1.5 text-[11px] font-semibold text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
+                >
+                  ✗ No
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
