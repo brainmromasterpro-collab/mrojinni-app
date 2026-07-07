@@ -865,6 +865,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   let productoPreview: {
     nombre?: string; marca?: string; part_number?: string;
     precio_costo?: string | number; moneda?: string; imagen_url?: string;
+    descripcion?: string; caracteristicas?: string[];
   } | null = null;
   if (productoMatch) { try { productoPreview = JSON.parse(productoMatch[1]); } catch { productoPreview = null; } }
   const displayText = rawText
@@ -908,6 +909,28 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
                 ) : null}
               </div>
             </div>
+            {productoPreview.descripcion && (
+              <div className="px-4 pb-3 -mt-1">
+                <p className="text-[12px] text-gray-400 leading-relaxed">{productoPreview.descripcion}</p>
+              </div>
+            )}
+            {productoPreview.caracteristicas && productoPreview.caracteristicas.length > 0 && (
+              <div className="px-4 pb-4 border-t border-[#2c2c2e] pt-3">
+                <p className="text-[11px] font-semibold text-gray-300 mb-2">Ficha técnica</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  {productoPreview.caracteristicas.map((c, i) => {
+                    const idx = c.indexOf(':');
+                    const label = idx > -1 ? c.slice(0, idx) : c;
+                    const val = idx > -1 ? c.slice(idx + 1).trim() : '';
+                    return (
+                      <div key={i} className="text-[11px] leading-snug">
+                        <span className="text-gray-500">{label}</span>{val && <span className="text-gray-300"> {val}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
         {displayText && (
