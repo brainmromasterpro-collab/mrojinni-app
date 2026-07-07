@@ -815,6 +815,18 @@ function AppContent() {
       created_at: new Date().toISOString(),
     }]);
 
+    // Indicador inmediato de "procesando" — evita que el chat se vea muerto durante el
+    // cómputo. Se reemplaza en vivo por los pasos de stream_logs y se quita solo cuando
+    // llega la respuesta del asistente (filtro `procesando` al aplicar la fila del asistente).
+    setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+      id: crypto.randomUUID(),
+      stream_id: activeStreamId,
+      rol: 'assistant',
+      tipo: 'rfq-log',
+      contenido: { text: 'Procesando tu solicitud…', status: 'querying', procesando: true },
+      created_at: new Date().toISOString(),
+    }]);
+
     pushLog(`Mensaje enviado: "${text.slice(0, 40)}${text.length > 40 ? '...' : ''}"`);
 
     const { error } = await supabase.from('mensajes').insert({
@@ -899,6 +911,28 @@ function AppContent() {
       if (data?.[0] && data[0].id !== lastSeenMensajeRef.current) applyAssistantRow(data[0]);
     }, 3000);
     return () => { supabase.removeChannel(channel); clearInterval(poll); };
+  }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Feed de progreso en vivo: cada paso que el backend escribe en stream_logs actualiza la
+  // burbuja "procesando" del chat (p.ej. "Escaneando correos: 3 oportunidades", "Correo
+  // enviado a X"), para que el 1-2 min de cómputo se vea vivo en vez de muerto.
+  useEffect(() => {
+    if (!activeStreamId) return;
+    const applyLog = (msg: string, tipo: string) => {
+      if (!msg) return;
+      setMessages((prev) => {
+        const idx = prev.findIndex((m) => (m.contenido as any)?.procesando);
+        if (idx === -1) return prev; // no hay burbuja activa → no mostramos nada
+        const next = [...prev];
+        next[idx] = { ...next[idx], contenido: { ...next[idx].contenido, text: msg, status: tipo === 'error' ? 'error' : 'querying' } };
+        return next;
+      });
+    };
+    const channel = supabase.channel(`streamlogs-chat-${activeStreamId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'stream_logs', filter: `stream_id=eq.${activeStreamId}` },
+        (payload) => applyLog((payload.new as any)?.msg, (payload.new as any)?.type))
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
   }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleActiveBulkIdChange = useCallback(async (bulkId: string | null) => {
