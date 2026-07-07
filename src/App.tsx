@@ -932,7 +932,17 @@ function AppContent() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'stream_logs', filter: `stream_id=eq.${activeStreamId}` },
         (payload) => applyLog((payload.new as any)?.msg, (payload.new as any)?.type))
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Poll de respaldo (por si Realtime no está habilitado para stream_logs): solo actualiza
+    // la burbuja mientras hay una "procesando" activa.
+    const lastLog = { id: null as string | null };
+    const poll = setInterval(async () => {
+      const { data } = await supabase.from('stream_logs')
+        .select('id, msg, type').eq('stream_id', activeStreamId)
+        .order('created_at', { ascending: false }).limit(1);
+      const row = data?.[0];
+      if (row && row.id !== lastLog.id) { lastLog.id = row.id; applyLog(row.msg, row.type); }
+    }, 2000);
+    return () => { supabase.removeChannel(channel); clearInterval(poll); };
   }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleActiveBulkIdChange = useCallback(async (bulkId: string | null) => {
@@ -943,8 +953,10 @@ function AppContent() {
     if (activeBulkIdRef.current === bulkId) return;
     setActiveBulkId(bulkId);
     setMessages((prev) => {
-      if (prev.some(m => m.tipo === 'bulk-widget' && (m.contenido as any)?.bulk_id === bulkId)) return prev;
-      return [...prev, {
+      // Al aparecer el resultado (bulk widget), quitar la burbuja "procesando"
+      const base = prev.filter((m) => !(m.contenido as any)?.procesando);
+      if (base.some(m => m.tipo === 'bulk-widget' && (m.contenido as any)?.bulk_id === bulkId)) return base;
+      return [...base, {
         id: crypto.randomUUID(),
         stream_id: activeStreamId ?? '',
         rol: 'assistant' as const,
