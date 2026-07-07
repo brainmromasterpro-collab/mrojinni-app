@@ -423,11 +423,13 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#2e2e2e] bg-[#252525]">
         <div className="flex items-center gap-2">
           <Package className="w-3.5 h-3.5 text-[#555]" />
-          <span className="text-[#ccc] font-sans font-semibold text-[12px]">Lote de búsqueda</span>
+          <span className="text-[#ccc] font-sans font-semibold text-[12px]">
+            {stats.total === 1 ? 'Producto' : 'Lote de búsqueda'}
+          </span>
           <span className="text-[#555] text-[11px]">·</span>
           <span className="text-[#666] text-[11px]">
-            {stats.total} productos
-            {stats.published > 0 && ` · ${stats.published} publicados`}
+            {stats.total === 1 ? '1 producto' : `${stats.total} productos`}
+            {stats.published > 0 && ` · ${stats.published} publicado${stats.published !== 1 ? 's' : ''}`}
           </span>
         </div>
         {!allFinished && stats.searching > 0
