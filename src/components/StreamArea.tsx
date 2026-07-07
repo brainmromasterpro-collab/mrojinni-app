@@ -5,6 +5,86 @@ import FileUploadCard from './FileUploadCard';
 import BulkWidget from './BulkWidget';
 import { supabase } from '../lib/supabase';
 
+// Extrae el JSON que sigue a un marcador (ej. "[OPORTUNIDADES]{...}"), respetando llaves anidadas.
+function extractMarkerJson(text: string, marker: string): { json: any; raw: string } | null {
+  const i = text.indexOf(marker);
+  if (i === -1) return null;
+  const start = text.indexOf('{', i);
+  if (start === -1) return null;
+  let depth = 0;
+  for (let j = start; j < text.length; j++) {
+    if (text[j] === '{') depth++;
+    else if (text[j] === '}') {
+      depth--;
+      if (depth === 0) {
+        const raw = text.slice(i, j + 1);
+        try { return { json: JSON.parse(text.slice(start, j + 1)), raw }; } catch { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+interface OportunidadItem {
+  remitente?: string; correo?: string; empresa?: string; es_cliente?: boolean;
+  productos?: string[]; faltan?: string[]; completa?: boolean;
+}
+interface OportunidadesData {
+  total?: number; resumen?: string; omitidas?: number;
+  oportunidades?: OportunidadItem[]; correos_no_rfq?: string[];
+}
+
+function OportunidadesWidget({ data }: { data: OportunidadesData }) {
+  const opps = data.oportunidades || [];
+  const total = data.total ?? opps.length;
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">{total > 0 ? '🔔' : '📭'}</span>
+        <span className="text-[12px] font-semibold text-white">
+          {total > 0 ? `${total} oportunidad${total !== 1 ? 'es' : ''} detectada${total !== 1 ? 's' : ''}` : 'Sin oportunidades nuevas'}
+        </span>
+      </div>
+      {data.resumen && <div className="px-4 pt-2.5"><p className="text-[11px] text-gray-400">{data.resumen}</p></div>}
+      <div className="p-3 space-y-2">
+        {opps.map((o, i) => (
+          <div key={i} className="bg-[#252527] border border-[#333] rounded-lg p-3">
+            <div className="flex items-start justify-between gap-2 mb-1.5">
+              <div className="min-w-0">
+                <p className="text-[12px] font-semibold text-white truncate">{o.empresa || o.remitente || o.correo}</p>
+                <p className="text-[11px] text-gray-500 truncate">{o.remitente}{o.correo ? ` · ${o.correo}` : ''}</p>
+              </div>
+              <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${o.completa ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                {o.completa ? '✓ Completa' : 'Incompleta'}
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-500 mb-1">
+              {o.es_cliente ? <span className="text-emerald-400">✓ Cliente en CRM</span> : <span className="text-gray-400">✗ No es cliente aún</span>}
+            </p>
+            {o.productos && o.productos.length > 0 && (
+              <div className="mb-1">
+                {o.productos.map((p, k) => <p key={k} className="text-[11px] text-gray-300 leading-snug">• {p}</p>)}
+              </div>
+            )}
+            {o.faltan && o.faltan.length > 0 && (
+              <p className="text-[11px] text-amber-400/90">Faltan: {o.faltan.join(', ')}</p>
+            )}
+          </div>
+        ))}
+        {total === 0 && data.correos_no_rfq && data.correos_no_rfq.length > 0 && (
+          <div className="px-1">
+            <p className="text-[11px] text-gray-500 mb-1">Revisé estos correos (ninguno es RFQ):</p>
+            {data.correos_no_rfq.map((c, i) => <p key={i} className="text-[11px] text-gray-400 leading-snug">• {c}</p>)}
+          </div>
+        )}
+        {!!data.omitidas && data.omitidas > 0 && (
+          <p className="text-[11px] text-gray-500 px-1">Omití {data.omitidas} que ya están en proceso, esperando respuesta del cliente.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface StreamAreaProps {
   stream: Stream | null;
   messages: Message[];
@@ -868,10 +948,13 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     descripcion?: string; caracteristicas?: string[];
   } | null = null;
   if (productoMatch) { try { productoPreview = JSON.parse(productoMatch[1]); } catch { productoPreview = null; } }
-  const displayText = rawText
+  const oportRes = extractMarkerJson(rawText, '[OPORTUNIDADES]');
+  const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
+  let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
     .trimEnd();
+  if (oportRes) displayText = displayText.replace(oportRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -884,6 +967,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
       <div className="max-w-[80%] space-y-2">
+        {oportunidadesData && <OportunidadesWidget data={oportunidadesData} />}
         {productoPreview && (
           <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
             <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
