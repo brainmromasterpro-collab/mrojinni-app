@@ -861,7 +861,16 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
 
   const rawText = contenido.text || '';
   const decisionMatch = rawText.match(/\[DECISION:\s*(.+?)\]/s);
-  const displayText = rawText.replace(/\[DECISION:\s*.+?\]/s, '').trimEnd();
+  const productoMatch = rawText.match(/\[PRODUCTO_PREVIEW\]\s*(\{[\s\S]*?\})/);
+  let productoPreview: {
+    nombre?: string; marca?: string; part_number?: string;
+    precio_costo?: string | number; moneda?: string; imagen_url?: string;
+  } | null = null;
+  if (productoMatch) { try { productoPreview = JSON.parse(productoMatch[1]); } catch { productoPreview = null; } }
+  const displayText = rawText
+    .replace(/\[DECISION:\s*.+?\]/s, '')
+    .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
+    .trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -873,10 +882,39 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
       <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brain-accent flex items-center justify-center">
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
-      <div className="max-w-[75%] space-y-2">
-        <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
-          <SimpleMarkdown text={displayText || rawText} />
-        </div>
+      <div className="max-w-[80%] space-y-2">
+        {productoPreview && (
+          <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+              <span className="text-[13px]">📦</span>
+              <span className="text-[12px] font-semibold text-white">Producto extraído del link</span>
+            </div>
+            <div className="p-4 flex gap-4 items-center">
+              {productoPreview.imagen_url && (
+                <div className="flex-shrink-0 w-24 h-24 rounded-lg bg-white p-1.5 flex items-center justify-center">
+                  <img src={productoPreview.imagen_url} alt={productoPreview.nombre || ''} className="max-w-full max-h-full object-contain" />
+                </div>
+              )}
+              <div className="min-w-0 space-y-1">
+                <p className="text-[14px] font-semibold text-white leading-snug">{productoPreview.nombre}</p>
+                {productoPreview.part_number && (
+                  <p className="text-[12px] text-gray-500">Parte <span className="text-gray-200 font-mono">{productoPreview.part_number}</span></p>
+                )}
+                {productoPreview.marca && (
+                  <p className="text-[12px] text-gray-500">Marca <span className="text-gray-200">{productoPreview.marca}</span></p>
+                )}
+                {productoPreview.precio_costo ? (
+                  <p className="text-[12px] text-gray-500">Costo proveedor <span className="text-gray-200">{productoPreview.precio_costo} {productoPreview.moneda || ''}</span> <span className="text-gray-600">(interno)</span></p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
+        {displayText && (
+          <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
+            <SimpleMarkdown text={displayText} />
+          </div>
+        )}
         {decisionMatch && (
           <div className="bg-[#FFFBEA] border border-[#F0D88A] rounded-xl px-4 py-3">
             <p className="text-[11px] font-semibold text-[#7A5000] mb-2.5">⚡ {decisionMatch[1].trim()}</p>
