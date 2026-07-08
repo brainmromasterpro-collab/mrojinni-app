@@ -39,6 +39,9 @@ const demoStreams: Stream[] = [
   },
 ];
 
+// El stream principal: siempre presente y primero (top bar y navegación).
+const MAIN_STREAM: Stream = demoStreams[0];
+
 const demoMessages: Message[] = [];
 
 export default function App() {
@@ -80,12 +83,15 @@ function AppContent() {
   const recentSearchesRef = useRef<Map<string, number>>(new Map());
   const [bulkRfqIds, setBulkRfqIds] = useState<Set<string>>(new Set());
 
-  // Cargar los streams desde Supabase en el mount (tabs manejados por la BD, no hardcodeados).
-  // Si la BD trae streams, reemplazan a los demo; si está vacía o falla, se quedan los demo.
+  // Cargar los streams desde Supabase en el mount. El MAIN (demoStreams[0]) SIEMPRE está y va
+  // primero, aunque RLS no lo devuelva para este usuario; los demás (creados por el usuario) van
+  // después. Así nunca se pierde el stream principal.
   useEffect(() => {
     supabase.from('streams').select('id,nombre,tipo,created_at,user_id').order('created_at').then(({ data }) => {
-      if (!data || data.length === 0) return;
-      setStreams(data as Stream[]);
+      const db = (data || []) as Stream[];
+      const dbMain = db.find((s) => s.id === MAIN_STREAM.id);
+      const others = db.filter((s) => s.id !== MAIN_STREAM.id);
+      setStreams([dbMain || MAIN_STREAM, ...others]);
     });
   }, []);
 

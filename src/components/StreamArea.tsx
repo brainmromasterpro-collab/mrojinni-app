@@ -137,6 +137,11 @@ interface StreamAreaProps {
 }
 
 const FILE_ACCEPT = '.txt,.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,.ogg';
+const TIPO_LABEL: Record<string, string> = {
+  correo: 'Correo', whatsapp: 'WhatsApp', busquedas: 'Búsquedas', publicacion: 'Publicación',
+  cotizacion: 'Cotización', mensajeria: 'Mensajería', catalogo: 'Catálogo',
+  compras: 'General', general: 'General', generico: 'General',
+};
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
 export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream }: StreamAreaProps) {
@@ -428,9 +433,9 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       {/* Header */}
       <div className="border-b border-brain-border bg-white flex-shrink-0 py-3">
         <div className="max-w-2xl mx-auto px-6 flex items-center gap-3">
-          <h2 className="text-[14px] font-semibold text-gray-900">RFQ Flow &middot; MRO Master Pro</h2>
+          <h2 className="text-[14px] font-semibold text-gray-900">{stream.nombre}</h2>
           <span className="text-[10px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft px-2.5 py-0.5 rounded-full">
-            Agente Buscador activo
+            {TIPO_LABEL[stream.tipo] || stream.tipo}
           </span>
           <button
             onClick={() => {
