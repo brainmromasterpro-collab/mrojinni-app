@@ -85,6 +85,40 @@ function OportunidadesWidget({ data }: { data: OportunidadesData }) {
   );
 }
 
+interface OportunidadCreadaData {
+  empresa?: string; oportunidad?: string; oportunidad_url?: string;
+  cuenta_url?: string; contacto?: string; contacto_url?: string;
+}
+function OportunidadCreadaWidget({ data }: { data: OportunidadCreadaData }) {
+  const Row = ({ label, value, url }: { label: string; value?: string; url?: string }) => (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="min-w-0">
+        <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
+        <p className="text-[12px] text-gray-200 truncate">{value || '—'}</p>
+      </div>
+      {url && (
+        <a href={url} target="_blank" rel="noreferrer"
+           className="shrink-0 text-[11px] font-medium text-[#7C74E0] hover:text-[#9a93ee] whitespace-nowrap">
+          Ver en CRM ↗
+        </a>
+      )}
+    </div>
+  );
+  return (
+    <div className="bg-[#1c1c1e] border border-emerald-500/25 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">✅</span>
+        <span className="text-[12px] font-semibold text-white">Oportunidad creada{data.empresa ? ` — ${data.empresa}` : ''}</span>
+      </div>
+      <div className="px-4 py-2 divide-y divide-[#2a2a2c]">
+        <Row label="Oportunidad" value={data.oportunidad} url={data.oportunidad_url} />
+        {data.cuenta_url && <Row label="Cuenta" value={data.empresa} url={data.cuenta_url} />}
+        {data.contacto_url && <Row label="Contacto" value={data.contacto} url={data.contacto_url} />}
+      </div>
+    </div>
+  );
+}
+
 interface StreamAreaProps {
   stream: Stream | null;
   messages: Message[];
@@ -950,11 +984,14 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (productoMatch) { try { productoPreview = JSON.parse(productoMatch[1]); } catch { productoPreview = null; } }
   const oportRes = extractMarkerJson(rawText, '[OPORTUNIDADES]');
   const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
+  const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
+  const oportCreadaData: OportunidadCreadaData | null = oportCreadaRes?.json || null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
     .trimEnd();
   if (oportRes) displayText = displayText.replace(oportRes.raw, '').trimEnd();
+  if (oportCreadaRes) displayText = displayText.replace(oportCreadaRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -968,6 +1005,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
       </div>
       <div className="max-w-[80%] space-y-2">
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} />}
+        {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
         {productoPreview && (
           <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
             <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
