@@ -987,18 +987,32 @@ interface ProdPreviewItem {
 function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
   const [sent, setSent] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const keyOf = (p: ProdPreviewItem, idx: number) => p.part_number || p.nombre || String(idx);
+  const allSent = productos.every((p, idx) => sent.has(keyOf(p, idx)));
   const publicarUno = (p: ProdPreviewItem, key: string) => {
     setSent((s) => new Set(s).add(key));
     onSendMessage?.(`Publica en 1CRM SOLO el producto "${p.part_number || p.nombre}" (${p.nombre || ''}). Usa los datos que ya extrajiste en el preview; NO vuelvas a extraer ni pidas confirmación.`);
+  };
+  const publicarTodos = () => {
+    setSent(new Set(productos.map(keyOf)));
+    onSendMessage?.('Publica en 1CRM TODOS los productos del preview de una sola vez (usa publicar_productos_desde_links con el arreglo completo; NO vuelvas a extraer ni pidas confirmación).');
   };
   return (
     <div className="rounded-xl overflow-hidden border border-[#2c2c2e] bg-[#1c1c1e]">
       <div className="px-4 py-2.5 bg-[#161618] border-b border-[#2c2c2e] flex items-center gap-2">
         <span className="text-[13px]">📦</span>
-        <span className="text-[12px] font-semibold text-white">{productos.length} productos extraídos — publica cada uno</span>
+        <span className="text-[12px] font-semibold text-white">{productos.length} productos extraídos</span>
+        {!allSent && (
+          <button
+            onClick={publicarTodos}
+            className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] transition-colors ml-auto"
+          >
+            <Send className="w-3 h-3" /> Publicar todos ({productos.length})
+          </button>
+        )}
       </div>
       {productos.map((p, idx) => {
-        const key = p.part_number || p.nombre || String(idx);
+        const key = keyOf(p, idx);
         const isSent = sent.has(key);
         const isExp = expanded === key;
         return (
@@ -1020,11 +1034,11 @@ function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdP
                   : <p className="text-[11px] text-gray-600">Sin precio — lo defines en el CRM</p>}
               </div>
               {isSent
-                ? <span className="text-[11px] text-emerald-400 font-medium whitespace-nowrap">✓ Enviado a publicar</span>
+                ? <span className="text-[11px] text-[#555] whitespace-nowrap flex items-center gap-1"><Check className="w-3 h-3" /> Enviado</span>
                 : (
                   <button
                     onClick={() => publicarUno(p, key)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium transition-colors whitespace-nowrap"
+                    className="flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] transition-colors whitespace-nowrap"
                   >
                     <Send className="w-3 h-3" /> Publicar
                   </button>
