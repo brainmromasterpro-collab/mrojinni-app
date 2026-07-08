@@ -1062,6 +1062,24 @@ function AppContent() {
 
     const isImage = /\.(png|jpg|jpeg|webp)$/i.test(file.name) || file.type.startsWith('image/');
     const isDocument = /\.(docx?|xlsx?)$/i.test(file.name) || /word|spreadsheet|excel/i.test(file.type);
+    const isText = /\.txt$/i.test(file.name) || file.type === 'text/plain';
+
+    // .txt con links → leer el contenido y mandarlo al chat como mensaje: el modelo detecta los
+    // links y corre el flujo de publicar (uno o varios → bulk). No requiere dependencias nuevas.
+    if (isText) {
+      try {
+        const resp = await fetch(file.url);
+        const content = (await resp.text()).slice(0, 8000);
+        await handleSendMessage(`Publica en 1CRM los productos de estos links (archivo "${file.name}"):\n\n${content}`);
+      } catch {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'text',
+          contenido: { text: `No pude leer el archivo "${file.name}".` }, created_at: new Date().toISOString(),
+        }]);
+      }
+      return;
+    }
+
     let imageUrl = file.url;
 
     // If storage upload failed and we only have a blob URL, try to re-upload from the blob
@@ -1268,7 +1286,7 @@ function AppContent() {
       }]);
       pushLog(`Error subiendo archivo: ${file.name}`, 'error');
     }
-  }, [activeStreamId]);
+  }, [activeStreamId, handleSendMessage]);
 
   function startImagenPolling(rfqId: string) {
     if (imagenPollingRef.current) {
