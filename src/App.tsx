@@ -1103,6 +1103,28 @@ function AppContent() {
 
     const hasRemoteUrl = imageUrl && !imageUrl.startsWith('blob:');
 
+    // Screenshot con links → visión en el chat: si el texto que acompaña indica publicar, se manda
+    // la imagen al chat (metadata.image_url) para que el modelo lea las URLs visibles y publique.
+    // El flujo normal de cotizar-por-imagen (extraer marca/modelo) queda intacto si no hay esa intención.
+    const wantsPublish = !!userText && /public|postea|sube|link|1crm|cat[aá]logo/i.test(userText);
+    if (isImage && wantsPublish && hasRemoteUrl) {
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
+        contenido: { text: userText! }, created_at: new Date().toISOString(),
+      }]);
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: '🔎 Leo los links de la imagen y publico… Te aviso al terminar.', status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || 'Publica en 1CRM los productos de los links que aparezcan en esta imagen.',
+        procesado: false, metadata: { image_url: imageUrl },
+      });
+      return;
+    }
+
     if (isImage && hasRemoteUrl) {
       const extractingMsg: Message = {
         id: crypto.randomUUID(),
