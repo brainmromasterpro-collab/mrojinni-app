@@ -1047,7 +1047,7 @@ function AppContent() {
   }
 
 
-  const handleFileUploaded = useCallback(async (file: { name: string; type: string; size: number; url: string }, userText?: string) => {
+  const handleFileUploaded = useCallback(async (file: { name: string; type: string; size: number; url: string }, userText?: string, intent?: 'publish' | 'quote') => {
     if (!activeStreamId) return;
     const fileMsg: Message = {
       id: crypto.randomUUID(),
@@ -1106,7 +1106,8 @@ function AppContent() {
     // Imágenes/screenshots = ampliar catálogo (publicar) POR DEFECTO: se mandan al chat con visión
     // (metadata.image_url) para que el modelo lea los links/datos y publique. Solo va al flujo de
     // cotización (extraer marca/modelo → RFQ) si el texto lo pide explícitamente (cotiza/rfq/precio).
-    const wantsQuote = !!userText && /cotiz|\brfq\b|precio|proveedor|busca/i.test(userText);
+    // Intención explícita del modal (publish/quote) manda; si no viene, se infiere del texto.
+    const wantsQuote = intent === 'quote' || (!intent && !!userText && /cotiz|\brfq\b|precio|proveedor|busca/i.test(userText));
     if (isImage && !wantsQuote && hasRemoteUrl) {
       if (userText) {
         setMessages((prev) => [...prev, {

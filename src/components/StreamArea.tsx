@@ -125,7 +125,7 @@ interface StreamAreaProps {
   bulkRfqIds: Set<string>;
   onActiveBulkIdChange: (id: string | null) => void;
   onSendMessage: (text: string) => void;
-  onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string) => void;
+  onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string, intent?: 'publish' | 'quote') => void;
   onDecision: (messageId: string, approved: boolean) => void;
   onImagenDecision: (rfqId: string, approved: boolean) => Promise<void>;
   onImagenRetry: (rfqId: string) => Promise<void>;
@@ -235,7 +235,22 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
     return (clean || `file_${Date.now()}`) + ext;
   }
 
-  async function handleFilesSelected(files: FileList | null) {
+  // Enruta lo seleccionado (drop/paste/picker): una imagen abre el modal de elección
+  // (publicar al catálogo vs buscar RFQ); los documentos van directo a handleFilesSelected.
+  function routeSelected(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const arr = Array.from(files);
+    const imgs = arr.filter((f) => f.type.startsWith('image/'));
+    const nonImgs = arr.filter((f) => !f.type.startsWith('image/'));
+    if (nonImgs.length) {
+      const dt = new DataTransfer();
+      nonImgs.forEach((f) => dt.items.add(f));
+      handleFilesSelected(dt.files);
+    }
+    if (imgs.length) setPendingDropFile(imgs[0]); // una imagen a la vez → modal de intención
+  }
+
+  async function handleFilesSelected(files: FileList | null, imageIntent?: 'publish' | 'quote') {
     if (!files || !stream) return;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -283,7 +298,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
         setPendingFile(fileObj);
         setPendingFileUploading(false);
       } else {
-        onFileUploaded(fileObj);
+        onFileUploaded(fileObj, undefined, imageIntent);
       }
     }
   }
@@ -317,12 +332,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
     dragCounter.current = 0;
     setIsDragging(false);
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        setPendingDropFile(file);
-      } else {
-        handleFilesSelected(e.dataTransfer.files);
-      }
+      routeSelected(e.dataTransfer.files);
     }
   }
 
@@ -340,7 +350,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       e.preventDefault();
       const dt = new DataTransfer();
       imageFiles.forEach((f) => dt.items.add(f));
-      handleFilesSelected(dt.files);
+      routeSelected(dt.files);
     }
   }
 
@@ -375,30 +385,41 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
           <div className="bg-white rounded-xl shadow-lg p-5 max-w-sm w-full mx-4 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-sky-50 border border-sky-200 flex items-center justify-center">
-                <Search className="w-5 h-5 text-sky-600" />
+                <PackageCheck className="w-5 h-5 text-sky-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-gray-900">Buscar RFQs en esta imagen?</p>
+                <p className="text-sm font-semibold text-gray-900">¿Qué hago con esta imagen?</p>
                 <p className="text-xs text-[#999]">{pendingDropFile.name}</p>
               </div>
             </div>
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-col gap-2">
               <button
-                onClick={() => setPendingDropFile(null)}
-                className="px-3 py-1.5 border border-brain-border text-sm rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+                onClick={() => {
+                  const dt = new DataTransfer();
+                  dt.items.add(pendingDropFile);
+                  handleFilesSelected(dt.files, 'publish');
+                  setPendingDropFile(null);
+                }}
+                className="w-full px-3 py-2 bg-brain-accent text-white text-sm font-medium rounded-lg hover:bg-brain-accent-hover transition-colors text-left"
               >
-                Cancelar
+                📦 Publicar al catálogo <span className="opacity-70 font-normal">— leo los links y publico</span>
               </button>
               <button
                 onClick={() => {
                   const dt = new DataTransfer();
                   dt.items.add(pendingDropFile);
-                  handleFilesSelected(dt.files);
+                  handleFilesSelected(dt.files, 'quote');
                   setPendingDropFile(null);
                 }}
-                className="px-3 py-1.5 bg-brain-accent text-white text-sm font-medium rounded-lg hover:bg-brain-accent-hover transition-colors"
+                className="w-full px-3 py-2 border border-brain-border text-sm font-medium rounded-lg text-gray-700 hover:bg-gray-50 transition-colors text-left"
               >
-                Si, buscar
+                🔍 Buscar RFQ <span className="opacity-60 font-normal">— busca inventario / proveedores</span>
+              </button>
+              <button
+                onClick={() => setPendingDropFile(null)}
+                className="w-full px-3 py-1.5 text-xs rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
+              >
+                Cancelar
               </button>
             </div>
           </div>
@@ -485,7 +506,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
         multiple
         accept={FILE_ACCEPT}
         className="hidden"
-        onChange={(e) => { handleFilesSelected(e.target.files); e.target.value = ''; }}
+        onChange={(e) => { routeSelected(e.target.files); e.target.value = ''; }}
       />
       <input
         ref={imageInputRef}
@@ -493,7 +514,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
         multiple
         accept={IMAGE_ACCEPT}
         className="hidden"
-        onChange={(e) => { handleFilesSelected(e.target.files); e.target.value = ''; }}
+        onChange={(e) => { routeSelected(e.target.files); e.target.value = ''; }}
       />
 
       {/* Pending document chip */}
