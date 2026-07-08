@@ -916,11 +916,24 @@ function AppContent() {
     const channel = supabase.channel(`mensajes-${activeStreamId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes', filter: `stream_id=eq.${activeStreamId}` }, (payload) => applyAssistantRow(payload.new as any))
       .subscribe();
-    const poll = setInterval(async () => {
+    // Trae la última respuesta del asistente que ya esté en la BD. Se llama en el poll y,
+    // sobre todo, al volver a la pestaña: el navegador congela setInterval y el websocket
+    // cuando la pestaña está en segundo plano, así que sin esto la respuesta (que ya llegó a
+    // la BD) no se pinta hasta que el poll despierta ~1-2 min después.
+    const refetchLatest = async () => {
       const { data } = await supabase.from('mensajes').select('*').eq('stream_id', activeStreamId).eq('role', 'assistant').order('created_at', { ascending: false }).limit(1);
       if (data?.[0] && data[0].id !== lastSeenMensajeRef.current) applyAssistantRow(data[0]);
-    }, 3000);
-    return () => { supabase.removeChannel(channel); clearInterval(poll); };
+    };
+    const poll = setInterval(refetchLatest, 3000);
+    const onVisible = () => { if (document.visibilityState === 'visible') refetchLatest(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', refetchLatest);
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', refetchLatest);
+    };
   }, [activeStreamId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Feed de progreso en vivo: cada paso que el backend escribe en stream_logs actualiza la
