@@ -818,12 +818,22 @@ function AppContent() {
     // Indicador inmediato de "procesando" — evita que el chat se vea muerto durante el
     // cómputo. Se reemplaza en vivo por los pasos de stream_logs y se quita solo cuando
     // llega la respuesta del asistente (filtro `procesando` al aplicar la fila del asistente).
+    // Estimado de tiempo INMEDIATO según el mensaje (no depende de stream_logs / realtime).
+    const _low = text.toLowerCase();
+    let _procText = 'Procesando tu solicitud… un momento.';
+    if (/https?:\/\//.test(text)) {
+      _procText = '🔎 Reviso el link del producto… (~15-40s). Te aviso al terminar.';
+    } else if (/(correo|oportunidad|email|\brfq\b|cotiza|escanea)/.test(_low)) {
+      _procText = '🔎 Reviso tu correo en busca de oportunidades… (~1 min). Te aviso al terminar.';
+    } else if (/^(s[ií]|no|ok|dale|adelante|publica|publícalo|env[ií]a)\b/.test(_low.trim())) {
+      _procText = 'Procesando tu aprobación… (~30s). Te aviso al terminar.';
+    }
     setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
       id: crypto.randomUUID(),
       stream_id: activeStreamId,
       rol: 'assistant',
       tipo: 'rfq-log',
-      contenido: { text: 'Procesando tu solicitud…', status: 'querying', procesando: true },
+      contenido: { text: _procText, status: 'querying', procesando: true },
       created_at: new Date().toISOString(),
     }]);
 
