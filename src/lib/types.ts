@@ -1,7 +1,7 @@
 export interface Stream {
   id: string;
   nombre: string;
-  tipo: 'compras' | 'ventas' | 'logistica' | 'general' | 'catalogo' | 'mensajeria' | 'cotizaciones' | 'ordenes';
+  tipo: 'compras' | 'ventas' | 'logistica' | 'general' | 'generico' | 'correo' | 'whatsapp' | 'busquedas' | 'publicacion' | 'cotizacion' | 'catalogo' | 'mensajeria' | 'cotizaciones' | 'ordenes';
   created_at: string;
   user_id: string;
 }

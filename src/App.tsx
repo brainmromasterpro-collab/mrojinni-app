@@ -1707,14 +1707,28 @@ function AppContent() {
     setActiveNav('chat');
   }
 
-  function handleCreateStream() {
+  async function handleCreateStream(tipo: string = 'generico') {
+    const NOMBRES: Record<string, string> = {
+      generico: 'Genérica', correo: 'Correo', whatsapp: 'WhatsApp',
+      busquedas: 'Búsquedas', publicacion: 'Publicación', cotizacion: 'Cotización',
+    };
+    // user_id real (auth) para que pase RLS y el backend lea el tipo; fallback al de un stream ya cargado.
+    let uid = streams.find((s) => s.user_id && s.user_id !== 'demo')?.user_id || 'demo';
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user?.id) uid = data.user.id;
+    } catch { /* sin sesión → fallback */ }
     const newStream: Stream = {
       id: crypto.randomUUID(),
-      nombre: `Stream ${streams.length + 1}`,
-      tipo: 'general',
+      nombre: NOMBRES[tipo] || `Stream ${streams.length + 1}`,
+      tipo: tipo as Stream['tipo'],
       created_at: new Date().toISOString(),
-      user_id: 'demo',
+      user_id: uid,
     };
+    const { error } = await supabase.from('streams').insert({
+      id: newStream.id, nombre: newStream.nombre, tipo: newStream.tipo, user_id: uid,
+    });
+    if (error) console.error('[stream] insert failed:', error.message);
     setStreams((prev) => [...prev, newStream]);
     setActiveStreamId(newStream.id);
     setActiveNav('chat');
