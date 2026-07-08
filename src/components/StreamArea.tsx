@@ -976,6 +976,93 @@ function SimpleMarkdown({ text }: { text: string }) {
   return <>{elements}</>;
 }
 
+interface ProdPreviewItem {
+  nombre?: string; marca?: string; part_number?: string;
+  precio_costo?: string | number; moneda?: string; imagen_url?: string;
+  descripcion?: string; caracteristicas?: string[]; url_origen?: string;
+}
+
+// Widget bulk de productos extraídos de varios links: cada fila tiene su propio botón Publicar
+// (secuencial). Al publicar, se manda un mensaje al chat para que el backend publique ESE producto.
+function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
+  const [sent, setSent] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const publicarUno = (p: ProdPreviewItem, key: string) => {
+    setSent((s) => new Set(s).add(key));
+    onSendMessage?.(`Publica en 1CRM SOLO el producto "${p.part_number || p.nombre}" (${p.nombre || ''}). Usa los datos que ya extrajiste en el preview; NO vuelvas a extraer ni pidas confirmación.`);
+  };
+  return (
+    <div className="rounded-xl overflow-hidden border border-[#2c2c2e] bg-[#1c1c1e]">
+      <div className="px-4 py-2.5 bg-[#161618] border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">📦</span>
+        <span className="text-[12px] font-semibold text-white">{productos.length} productos extraídos — publica cada uno</span>
+      </div>
+      {productos.map((p, idx) => {
+        const key = p.part_number || p.nombre || String(idx);
+        const isSent = sent.has(key);
+        const isExp = expanded === key;
+        return (
+          <div key={key} className="border-b border-[#2c2c2e] last:border-0">
+            <div className="flex gap-3 px-4 py-3 items-center">
+              <div className="flex-shrink-0 w-14 h-14 rounded-lg bg-white/5 border border-[#3a3a3a] flex items-center justify-center overflow-hidden">
+                {p.imagen_url
+                  ? <img src={p.imagen_url} alt={p.nombre || ''} className="w-full h-full object-contain p-1" />
+                  : <PackageCheck className="w-6 h-6 text-[#3a3a3a]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[13px] font-semibold text-white truncate">{p.nombre || p.part_number}</p>
+                <p className="text-[11px] text-gray-500 truncate">
+                  Parte <span className="font-mono text-gray-300">{p.part_number || '—'}</span>
+                  {p.marca ? <> · <span className="text-gray-300">{p.marca}</span></> : null}
+                </p>
+                {p.precio_costo
+                  ? <p className="text-[11px] text-gray-500">Costo <span className="text-gray-300">{p.precio_costo} {p.moneda || ''}</span></p>
+                  : <p className="text-[11px] text-gray-600">Sin precio — lo defines en el CRM</p>}
+              </div>
+              {isSent
+                ? <span className="text-[11px] text-emerald-400 font-medium whitespace-nowrap">✓ Enviado a publicar</span>
+                : (
+                  <button
+                    onClick={() => publicarUno(p, key)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-medium transition-colors whitespace-nowrap"
+                  >
+                    <Send className="w-3 h-3" /> Publicar
+                  </button>
+                )}
+            </div>
+            {(p.descripcion || (p.caracteristicas && p.caracteristicas.length > 0)) && (
+              <div className="px-4 pb-2 -mt-1">
+                <button onClick={() => setExpanded(isExp ? null : key)} className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors">
+                  {isExp ? '▾ ocultar detalle' : '▸ ver detalle'}
+                </button>
+                {isExp && (
+                  <div className="mt-2 space-y-2">
+                    {p.descripcion && <p className="text-[11px] text-gray-400 leading-relaxed">{p.descripcion}</p>}
+                    {p.caracteristicas && p.caracteristicas.length > 0 && (
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {p.caracteristicas.map((c, i) => {
+                          const ci = c.indexOf(':');
+                          const label = ci > -1 ? c.slice(0, ci) : c;
+                          const val = ci > -1 ? c.slice(ci + 1).trim() : '';
+                          return (
+                            <div key={i} className="text-[10px] leading-snug">
+                              <span className="text-gray-500">{label}</span>{val && <span className="text-gray-300"> {val}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function MessageBubble({ message, onSendMessage }: { message: Message; onSendMessage?: (text: string) => void }) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
@@ -1003,6 +1090,11 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     descripcion?: string; caracteristicas?: string[];
   } | null = null;
   if (productoMatch) { try { productoPreview = JSON.parse(productoMatch[1]); } catch { productoPreview = null; } }
+  const productosRes = extractMarkerJson(rawText, '[PRODUCTOS_PREVIEW]');
+  const productosPreview: ProdPreviewItem[] | null =
+    (productosRes?.json && Array.isArray((productosRes.json as { productos?: ProdPreviewItem[] }).productos))
+      ? (productosRes.json as { productos: ProdPreviewItem[] }).productos
+      : null;
   const oportRes = extractMarkerJson(rawText, '[OPORTUNIDADES]');
   const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
   const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
@@ -1013,6 +1105,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     .trimEnd();
   if (oportRes) displayText = displayText.replace(oportRes.raw, '').trimEnd();
   if (oportCreadaRes) displayText = displayText.replace(oportCreadaRes.raw, '').trimEnd();
+  if (productosRes) displayText = displayText.replace(productosRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1075,6 +1168,9 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
               </div>
             )}
           </div>
+        )}
+        {productosPreview && productosPreview.length > 0 && (
+          <ProductosPreviewWidget productos={productosPreview} onSendMessage={onSendMessage} />
         )}
         {displayText && (
           <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
