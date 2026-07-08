@@ -80,12 +80,12 @@ function AppContent() {
   const recentSearchesRef = useRef<Map<string, number>>(new Map());
   const [bulkRfqIds, setBulkRfqIds] = useState<Set<string>>(new Set());
 
-  // Sync stream names from Supabase on mount (names may have been renamed)
+  // Cargar los streams desde Supabase en el mount (tabs manejados por la BD, no hardcodeados).
+  // Si la BD trae streams, reemplazan a los demo; si está vacía o falla, se quedan los demo.
   useEffect(() => {
-    supabase.from('streams').select('id,nombre').then(({ data }) => {
-      if (!data) return;
-      const nameMap = new Map(data.map((r: { id: string; nombre: string }) => [r.id, r.nombre]));
-      setStreams((prev) => prev.map((s) => nameMap.has(s.id) ? { ...s, nombre: nameMap.get(s.id)! } : s));
+    supabase.from('streams').select('id,nombre,tipo,created_at,user_id').order('created_at').then(({ data }) => {
+      if (!data || data.length === 0) return;
+      setStreams(data as Stream[]);
     });
   }, []);
 
