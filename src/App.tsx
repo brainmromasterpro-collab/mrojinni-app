@@ -1103,23 +1103,25 @@ function AppContent() {
 
     const hasRemoteUrl = imageUrl && !imageUrl.startsWith('blob:');
 
-    // Screenshot con links → visión en el chat: si el texto que acompaña indica publicar, se manda
-    // la imagen al chat (metadata.image_url) para que el modelo lea las URLs visibles y publique.
-    // El flujo normal de cotizar-por-imagen (extraer marca/modelo) queda intacto si no hay esa intención.
-    const wantsPublish = !!userText && /public|postea|sube|link|1crm|cat[aá]logo/i.test(userText);
-    if (isImage && wantsPublish && hasRemoteUrl) {
-      setMessages((prev) => [...prev, {
-        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
-        contenido: { text: userText! }, created_at: new Date().toISOString(),
-      }]);
+    // Imágenes/screenshots = ampliar catálogo (publicar) POR DEFECTO: se mandan al chat con visión
+    // (metadata.image_url) para que el modelo lea los links/datos y publique. Solo va al flujo de
+    // cotización (extraer marca/modelo → RFQ) si el texto lo pide explícitamente (cotiza/rfq/precio).
+    const wantsQuote = !!userText && /cotiz|\brfq\b|precio|proveedor|busca/i.test(userText);
+    if (isImage && !wantsQuote && hasRemoteUrl) {
+      if (userText) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
+          contenido: { text: userText }, created_at: new Date().toISOString(),
+        }]);
+      }
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
-        contenido: { text: '🔎 Leo los links de la imagen y publico… Te aviso al terminar.', status: 'querying', procesando: true },
+        contenido: { text: '🔎 Leo la imagen y publico en el catálogo… Te aviso al terminar.', status: 'querying', procesando: true },
         created_at: new Date().toISOString(),
       }]);
       await supabase.from('mensajes').insert({
         stream_id: activeStreamId, role: 'user',
-        content: userText || 'Publica en 1CRM los productos de los links que aparezcan en esta imagen.',
+        content: userText || 'Lee esta imagen y publica en 1CRM los productos que aparezcan (es para ampliar el catálogo). Si hay URLs de producto, úsalas; si no hay ninguna URL legible, dime qué ves y qué falta — no inventes datos.',
         procesado: false, metadata: { image_url: imageUrl },
       });
       return;
