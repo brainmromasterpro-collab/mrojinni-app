@@ -825,7 +825,7 @@ function AppContent() {
       _procText = '🔎 Reviso el link del producto… (~15-40s). Te aviso al terminar.';
     } else if (/(correo|oportunidad|email|\brfq\b|cotiza|escanea)/.test(_low)) {
       _procText = '🔎 Reviso tu correo en busca de oportunidades… (~1 min). Te aviso al terminar.';
-    } else if (/^(s[ií]|no|ok|dale|adelante|publica|publícalo|env[ií]a)\b/.test(_low.trim())) {
+    } else if (/^(s[ií]|no|ok|dale|adelante|publica|publícalo|env[ií]a)(\W|$)/.test(_low.trim())) {
       _procText = 'Procesando tu aprobación… (~30s). Te aviso al terminar.';
     }
     setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
