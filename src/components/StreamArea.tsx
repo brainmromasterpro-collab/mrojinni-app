@@ -991,11 +991,12 @@ function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdP
   const allSent = productos.every((p, idx) => sent.has(keyOf(p, idx)));
   const publicarUno = (p: ProdPreviewItem, key: string) => {
     setSent((s) => new Set(s).add(key));
-    onSendMessage?.(`Publica en 1CRM SOLO el producto "${p.part_number || p.nombre}" (${p.nombre || ''}). Usa los datos que ya extrajiste en el preview; NO vuelvas a extraer ni pidas confirmación.`);
+    const nom = p.nombre ? ` (${p.nombre})` : '';
+    onSendMessage?.(`Publica el producto ${p.part_number || p.nombre}${nom}.`);
   };
   const publicarTodos = () => {
     setSent(new Set(productos.map(keyOf)));
-    onSendMessage?.('Publica en 1CRM TODOS los productos del preview de una sola vez (usa publicar_productos_desde_links con el arreglo completo; NO vuelvas a extraer ni pidas confirmación).');
+    onSendMessage?.('Publica todos los productos del preview.');
   };
   return (
     <div className="rounded-xl overflow-hidden border border-[#2c2c2e] bg-[#1c1c1e]">
