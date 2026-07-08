@@ -1792,7 +1792,7 @@ function AppContent() {
           />
         )}
         {!['dashboard', 'activity', 'connectors', 'agentes', 'infra'].includes(activeNav) && (
-          <RightPanel visible={true} streamId={activeStreamId} />
+          <RightPanel visible={true} streamId={activeStreamId} tipo={activeStream?.tipo} />
         )}
       </div>
     </div>
