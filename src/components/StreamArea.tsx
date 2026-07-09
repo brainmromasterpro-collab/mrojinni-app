@@ -34,9 +34,11 @@ interface OportunidadesData {
   oportunidades?: OportunidadItem[]; correos_no_rfq?: string[];
 }
 
-function OportunidadesWidget({ data }: { data: OportunidadesData }) {
+function OportunidadesWidget({ data, onSendMessage }: { data: OportunidadesData; onSendMessage?: (text: string) => void }) {
   const opps = data.oportunidades || [];
   const total = data.total ?? opps.length;
+  const verDetalle = (o: OportunidadItem) =>
+    onSendMessage?.(`Detalla la oportunidad de "${o.empresa || o.remitente || o.correo}" (correo de ${o.remitente || o.correo}): dame el diagnóstico completo, qué falta y qué hacer.`);
   return (
     <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
@@ -48,7 +50,11 @@ function OportunidadesWidget({ data }: { data: OportunidadesData }) {
       {data.resumen && <div className="px-4 pt-2.5"><p className="text-[11px] text-gray-400">{data.resumen}</p></div>}
       <div className="p-3 space-y-2">
         {opps.map((o, i) => (
-          <div key={i} className="bg-[#252527] border border-[#333] rounded-lg p-3">
+          <button
+            key={i}
+            onClick={() => verDetalle(o)}
+            className="w-full text-left bg-[#252527] border border-[#333] rounded-lg p-3 hover:border-[#4a4a4a] hover:bg-[#2a2a2c] transition-colors group"
+          >
             <div className="flex items-start justify-between gap-2 mb-1.5">
               <div className="min-w-0">
                 <p className="text-[12px] font-semibold text-white truncate">{o.empresa || o.remitente || o.correo}</p>
@@ -69,7 +75,8 @@ function OportunidadesWidget({ data }: { data: OportunidadesData }) {
             {o.faltan && o.faltan.length > 0 && (
               <p className="text-[11px] text-amber-400/90">Faltan: {o.faltan.join(', ')}</p>
             )}
-          </div>
+            <p className="text-[10px] text-[#a78bfa] opacity-0 group-hover:opacity-100 transition-opacity mt-1.5">Ver detalle y decidir →</p>
+          </button>
         ))}
         {total === 0 && data.correos_no_rfq && data.correos_no_rfq.length > 0 && (
           <div className="px-1">
@@ -1219,7 +1226,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
       </div>
       <div className="max-w-[80%] space-y-2">
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
-        {oportunidadesData && <OportunidadesWidget data={oportunidadesData} />}
+        {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
         {productoPreview && (
           <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
