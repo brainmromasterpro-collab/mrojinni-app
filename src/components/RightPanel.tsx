@@ -20,13 +20,25 @@ const _LINK = '\u{1F517}', _GLOBE = '\u{1F310}', _MAIL = '✉', _CHAT = '\u{1F4A
 const TIPO_CONFIG: Record<string, TipoConfig> = {
   correo: {
     label: 'Correo',
-    agentes: [{ key: 'lector', label: 'Lector de correo' }, { key: 'detector', label: 'Detector de oportunidad' }, { key: 'redactor', label: 'Redactor de respuesta' }],
+    agentes: [
+      { key: 'lector', label: 'Lector de correo' },
+      { key: 'detector', label: 'Detector de oportunidad' },
+      { key: 'buscador', label: 'Buscador RFQ (interno + web)' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)' },
+      { key: 'seguimiento', label: 'Seguimiento' },
+    ],
     fuentes: [{ icon: _MAIL, name: 'Gmail · bandeja' }, { icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['Gmail', '1CRM'],
   },
   whatsapp: {
     label: 'WhatsApp',
-    agentes: [{ key: 'lector', label: 'Lector de mensajes' }, { key: 'detector', label: 'Detector de oportunidad' }, { key: 'redactor', label: 'Redactor de respuesta' }],
+    agentes: [
+      { key: 'lector', label: 'Lector de mensajes' },
+      { key: 'detector', label: 'Detector de oportunidad' },
+      { key: 'buscador', label: 'Buscador RFQ (interno + web)' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)' },
+      { key: 'seguimiento', label: 'Seguimiento' },
+    ],
     fuentes: [{ icon: _CHAT, name: 'WhatsApp · chats' }, { icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['WhatsApp', '1CRM'],
   },
