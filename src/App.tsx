@@ -1127,21 +1127,29 @@ function AppContent() {
     // cotización (extraer marca/modelo → RFQ) si el texto lo pide explícitamente (cotiza/rfq/precio).
     // Intención explícita del modal (publish/quote) manda; si no viene, se infiere del texto.
     const wantsQuote = intent === 'quote' || (!intent && !!userText && /cotiz|\brfq\b|precio|proveedor|busca/i.test(userText));
-    if (isImage && !wantsQuote && hasRemoteUrl) {
+    // Toda imagen pasa por el chat con VISIÓN (Sonnet). Publicar por defecto; extraer RFQs si la
+    // intención es cotizar/buscar. Más robusto que la edge function extract-from-image.
+    if (isImage && hasRemoteUrl) {
       if (userText) {
         setMessages((prev) => [...prev, {
           id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
           contenido: { text: userText }, created_at: new Date().toISOString(),
         }]);
       }
+      const procText = wantsQuote
+        ? '🔎 Leo la imagen y extraigo los productos para buscarlos… Te aviso al terminar.'
+        : '🔎 Leo la imagen y publico en el catálogo… Te aviso al terminar.';
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
-        contenido: { text: '🔎 Leo la imagen y publico en el catálogo… Te aviso al terminar.', status: 'querying', procesando: true },
+        contenido: { text: procText, status: 'querying', procesando: true },
         created_at: new Date().toISOString(),
       }]);
+      const defaultMsg = wantsQuote
+        ? 'Extrae de esta imagen TODOS los productos de la lista (marca y número de parte / modelo, con cantidad si aparece) y créalos como RFQs para buscarlos con crear_rfqs_desde_texto. NO inventes datos; si una fila no se lee bien, omítela o dímelo.'
+        : 'Lee esta imagen y publica en 1CRM los productos que aparezcan (es para ampliar el catálogo). Si hay URLs de producto, úsalas; si no hay ninguna URL legible, dime qué ves y qué falta — no inventes datos.';
       await supabase.from('mensajes').insert({
         stream_id: activeStreamId, role: 'user',
-        content: userText || 'Lee esta imagen y publica en 1CRM los productos que aparezcan (es para ampliar el catálogo). Si hay URLs de producto, úsalas; si no hay ninguna URL legible, dime qué ves y qué falta — no inventes datos.',
+        content: userText || defaultMsg,
         procesado: false, metadata: { image_url: imageUrl },
       });
       return;
