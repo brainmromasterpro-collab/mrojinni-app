@@ -19,12 +19,15 @@ interface TopBarProps {
   onCreateStream: (tipo: string) => void;
   onDeleteStream: (id: string) => void;
   onRenameStream: (id: string, nombre: string) => void;
+  onReorderStreams: (from: number, to: number) => void;
 }
 
-export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream }: TopBarProps) {
+export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream, onReorderStreams }: TopBarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const dragIndex = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   function startEdit(s: { id: string; nombre: string }, e: React.MouseEvent) {
@@ -46,11 +49,24 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
         <span className="text-brain-accent">&#x2B21;</span> BRAIN
       </span>
 
-      {streams.map((s) => (
+      {streams.map((s, i) => (
         <div
           key={s.id}
+          draggable={editingId !== s.id}
+          onDragStart={() => { dragIndex.current = i; }}
+          onDragOver={(e) => { e.preventDefault(); if (dragOver !== i) setDragOver(i); }}
+          onDragLeave={() => setDragOver((d) => (d === i ? null : d))}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragIndex.current !== null && dragIndex.current !== i) onReorderStreams(dragIndex.current, i);
+            dragIndex.current = null;
+            setDragOver(null);
+          }}
+          onDragEnd={() => { dragIndex.current = null; setDragOver(null); }}
           className={`group relative flex items-center gap-1 px-3 py-1.5 text-[11px] rounded-md border whitespace-nowrap transition-all ${
-            editingId === s.id ? 'cursor-text' : 'cursor-pointer'
+            editingId === s.id ? 'cursor-text' : 'cursor-grab active:cursor-grabbing'
+          } ${
+            dragOver === i ? 'ring-1 ring-brain-accent' : ''
           } ${
             s.id === activeStreamId
               ? 'bg-brain-border-dark text-white border-[#555]'

@@ -91,7 +91,20 @@ function AppContent() {
       const db = (data || []) as Stream[];
       const dbMain = db.find((s) => s.id === MAIN_STREAM.id);
       const others = db.filter((s) => s.id !== MAIN_STREAM.id);
-      setStreams([dbMain || MAIN_STREAM, ...others]);
+      const all = [dbMain || MAIN_STREAM, ...others];
+      // aplicar el orden guardado por el usuario (drag&drop), manteniendo el main primero
+      try {
+        const saved: string[] = JSON.parse(localStorage.getItem('streamOrder') || '[]');
+        if (saved.length) {
+          all.sort((a, b) => {
+            const ia = saved.indexOf(a.id); const ib = saved.indexOf(b.id);
+            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+          });
+          const mid = all.findIndex((s) => s.id === MAIN_STREAM.id);
+          if (mid > 0) { const [m] = all.splice(mid, 1); all.unshift(m); }
+        }
+      } catch { /* ignore */ }
+      setStreams(all);
     });
   }, []);
 
@@ -1713,6 +1726,20 @@ function AppContent() {
     setActiveNav('chat');
   }
 
+  function handleReorderStreams(from: number, to: number) {
+    setStreams((prev) => {
+      if (from < 0 || to < 0 || from >= prev.length || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      // el main siempre queda primero
+      const mid = next.findIndex((s) => s.id === MAIN_STREAM.id);
+      if (mid > 0) { const [m] = next.splice(mid, 1); next.unshift(m); }
+      try { localStorage.setItem('streamOrder', JSON.stringify(next.map((s) => s.id))); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
   async function handleCreateStream(tipo: string = 'generico') {
     const NOMBRES: Record<string, string> = {
       generico: 'Genérica', correo: 'Correo', whatsapp: 'WhatsApp',
@@ -1766,6 +1793,7 @@ function AppContent() {
         onCreateStream={handleCreateStream}
         onDeleteStream={handleDeleteStream}
         onRenameStream={handleRenameStream}
+        onReorderStreams={handleReorderStreams}
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} streams={streams} activeStreamId={activeStreamId} onSelectStream={handleSelectStream} />
