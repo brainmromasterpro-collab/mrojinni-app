@@ -229,6 +229,7 @@ function TypedAgentsSection({ streamId, cfg }: { streamId: string | null; cfg: T
         <div className="space-y-1">
           {cfg.agentes.map((a) => {
             const isRunning = running.has(a.key);
+            const estado = isRunning ? 'corriendo' : (a.key === 'lector' ? 'vigilando' : 'listo');
             return (
               <div key={a.key} className="flex items-center justify-between px-2 py-1.5 bg-brain-card rounded-md">
                 <span className="flex items-center gap-1.5 text-[10px] text-[#ccc]">
@@ -236,7 +237,7 @@ function TypedAgentsSection({ streamId, cfg }: { streamId: string | null; cfg: T
                   {a.label}
                 </span>
                 <span className={`text-[9px] font-medium ${isRunning ? 'text-brain-warning' : 'text-brain-success'}`}>
-                  {isRunning ? 'corriendo' : 'listo'}
+                  {estado}
                 </span>
               </div>
             );
