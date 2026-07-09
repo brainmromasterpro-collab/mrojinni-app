@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { RefreshCw, LogOut, X } from 'lucide-react';
+import { RefreshCw, LogOut, X, Sparkles } from 'lucide-react';
 import NotificationBell from './NotificationBell';
 import { supabase } from '../lib/supabase';
 
@@ -46,16 +46,7 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
   return (
     <header className="h-topbar bg-brain-dark flex items-center gap-2 px-4 border-b border-brain-border-dark flex-shrink-0">
       <span className="text-white text-[13px] font-semibold tracking-wide mr-3 opacity-90 flex items-center gap-1.5">
-        <span className="text-brain-accent flex items-center" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M5 10c0-3.9 3.1-6.6 7-6.6s7 2.7 7 6.6" />
-            <path d="M5 10c2.3 1.2 4.6 1.8 7 1.8s4.7-.6 7-1.8" />
-            <circle cx="12" cy="6.1" r="1.4" />
-            <path d="M6.5 10.4v2.3a5.5 5.5 0 0 0 11 0v-2.3" />
-            <path d="M10 13.6h.01M14 13.6h.01" />
-            <path d="M10.4 16c.5.5 1 .7 1.6.7s1.1-.2 1.6-.7" />
-          </svg>
-        </span>
+        <Sparkles className="w-[16px] h-[16px] text-brain-accent" aria-hidden="true" />
         My Genie
       </span>
 
