@@ -1175,9 +1175,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
         <div className="max-w-[60%] px-4 py-2.5 rounded-xl bg-[#4A3F8F] text-white text-[12px] leading-relaxed rounded-br-sm">
           {contenido.text || ''}
         </div>
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brain-border flex items-center justify-center">
-          <span className="text-[12px] font-medium text-[#555]">A</span>
-        </div>
+        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover" />
       </div>
     );
   }
