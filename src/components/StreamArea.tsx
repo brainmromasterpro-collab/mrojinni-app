@@ -1865,7 +1865,10 @@ function RFQLogBubble({ message }: { message: Message }) {
   const Icon = config.icon;
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+      {!isUser && (
+        <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5" />
+      )}
       <div className={`flex items-start gap-2.5 max-w-[80%] px-3.5 py-2.5 rounded-xl ${config.bg} border ${config.border} ${config.pulse ? 'animate-pulse-subtle' : ''}`}>
         <div className={`flex-shrink-0 w-6 h-6 rounded-md ${config.bg} flex items-center justify-center mt-0.5`}>
           <Icon className={`w-3.5 h-3.5 ${config.color}`} />
@@ -1881,6 +1884,9 @@ function RFQLogBubble({ message }: { message: Message }) {
           </p>
         </div>
       </div>
+      {isUser && (
+        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover" />
+      )}
     </div>
   );
 }
