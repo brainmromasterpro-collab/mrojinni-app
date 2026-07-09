@@ -513,7 +513,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       )}
       {/* Header */}
       <div className="border-b border-brain-border bg-white flex-shrink-0 py-3">
-        <div className="max-w-2xl mx-auto px-6 flex items-center gap-3">
+        <div className="max-w-3xl mx-auto px-6 flex items-center gap-3">
           <h2 className="text-[14px] font-semibold text-gray-900">{stream.nombre}</h2>
           <span className="text-[10px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft px-2.5 py-0.5 rounded-full">
             {TIPO_LABEL[stream.tipo] || stream.tipo}
@@ -535,7 +535,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-light py-6">
-        <div className="max-w-2xl mx-auto px-6 space-y-4">
+        <div className="max-w-3xl mx-auto px-6 space-y-4">
           {messages.map((msg) => {
             if (msg.tipo === 'rfq-form') {
               return null;
@@ -606,7 +606,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       {/* Pending document chip */}
       {(pendingFile || pendingFileUploading) && (
         <div className="border-t border-brain-border bg-white px-4 pt-3 pb-1">
-          <div className="max-w-2xl mx-auto">
+          <div className="max-w-3xl mx-auto">
             {pendingFileUploading ? (
               <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
                 <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin flex-shrink-0" />
@@ -777,7 +777,7 @@ function MobileVoiceInput({ input, setInput, onSend, onKeyDown, onPaste, onFileC
 
   return (
     <div className="flex-shrink-0 pb-5 pt-2 px-4 md:px-6">
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-3xl mx-auto">
         {/* Desktop: always show full chatbox */}
         <div className="hidden md:flex items-center gap-3 bg-white border border-brain-border rounded-2xl px-4 py-3 shadow-sm">
           <input
@@ -1171,11 +1171,11 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
 
   if (isUser) {
     return (
-      <div className="flex items-start gap-3 justify-end">
-        <div className="max-w-[60%] px-4 py-2.5 rounded-xl bg-[#4A3F8F] text-white text-[12px] leading-relaxed rounded-br-sm">
+      <div className="flex items-start gap-2.5 justify-end">
+        <div className="max-w-[80%] min-w-0 px-4 py-2.5 rounded-xl bg-[#4A3F8F] text-white text-[12px] leading-relaxed rounded-br-sm break-words [overflow-wrap:anywhere]">
           {contenido.text || ''}
         </div>
-        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover" />
+        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover -mr-10" />
       </div>
     );
   }
@@ -1218,9 +1218,9 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   }
 
   return (
-    <div className="flex items-start gap-3">
-      <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5" />
-      <div className="max-w-[80%] space-y-2">
+    <div className="flex items-start gap-2.5">
+      <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
+      <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
@@ -1296,7 +1296,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
           <ProductosPreviewWidget productos={productosPreview} onSendMessage={onSendMessage} />
         )}
         {displayText && (
-          <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm">
+          <div className="px-4 py-2.5 rounded-xl bg-white border border-brain-border text-gray-700 text-[12px] leading-relaxed rounded-bl-sm break-words [overflow-wrap:anywhere]">
             <SimpleMarkdown text={displayText} />
           </div>
         )}
@@ -1865,11 +1865,11 @@ function RFQLogBubble({ message }: { message: Message }) {
   const Icon = config.icon;
 
   return (
-    <div className={`flex items-start gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex items-start gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5" />
+        <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
       )}
-      <div className={`flex items-start gap-2.5 max-w-[80%] px-3.5 py-2.5 rounded-xl ${config.bg} border ${config.border} ${config.pulse ? 'animate-pulse-subtle' : ''}`}>
+      <div className={`flex items-start gap-2.5 max-w-[88%] min-w-0 px-3.5 py-2.5 rounded-xl ${config.bg} border ${config.border} ${config.pulse ? 'animate-pulse-subtle' : ''}`}>
         <div className={`flex-shrink-0 w-6 h-6 rounded-md ${config.bg} flex items-center justify-center mt-0.5`}>
           <Icon className={`w-3.5 h-3.5 ${config.color}`} />
         </div>
@@ -1879,13 +1879,13 @@ function RFQLogBubble({ message }: { message: Message }) {
               {contenido.rfqId}
             </span>
           )}
-          <p className={`text-[12px] ${config.color} leading-relaxed mt-0.5`}>
+          <p className={`text-[12px] ${config.color} leading-relaxed mt-0.5 break-words [overflow-wrap:anywhere]`}>
             {contenido.text || ''}
           </p>
         </div>
       </div>
       {isUser && (
-        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover" />
+        <img src="/man.png" alt="Yo" className="flex-shrink-0 w-8 h-8 rounded-full object-cover -mr-10" />
       )}
     </div>
   );
