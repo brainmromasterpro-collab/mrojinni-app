@@ -1219,9 +1219,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
 
   return (
     <div className="flex items-start gap-3">
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brain-accent flex items-center justify-center">
-        <span className="text-white text-[11px] font-bold">&#x2B21;</span>
-      </div>
+      <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5" />
       <div className="max-w-[80%] space-y-2">
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
