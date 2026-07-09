@@ -1115,6 +1115,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     (productosRes?.json && Array.isArray((productosRes.json as { productos?: ProdPreviewItem[] }).productos))
       ? (productosRes.json as { productos: ProdPreviewItem[] }).productos
       : null;
+  const correoRes = extractMarkerJson(rawText, '[CORREO_ENTRANTE]');
+  const correoEntrante = (correoRes?.json || null) as { de?: string; asunto?: string; snippet?: string; gmail_id?: string } | null;
   const oportRes = extractMarkerJson(rawText, '[OPORTUNIDADES]');
   const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
   const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
@@ -1126,6 +1128,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (oportRes) displayText = displayText.replace(oportRes.raw, '').trimEnd();
   if (oportCreadaRes) displayText = displayText.replace(oportCreadaRes.raw, '').trimEnd();
   if (productosRes) displayText = displayText.replace(productosRes.raw, '').trimEnd();
+  if (correoRes) displayText = displayText.replace(correoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1187,6 +1190,25 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
                 </div>
               </div>
             )}
+          </div>
+        )}
+        {correoEntrante && (
+          <div className="rounded-xl overflow-hidden border border-[#2c2c2e] bg-[#1c1c1e]">
+            <div className="px-4 py-2.5 bg-[#161618] border-b border-[#2c2c2e] flex items-center gap-2">
+              <span className="text-[13px]">✉</span>
+              <span className="text-[12px] font-semibold text-white">Correo nuevo</span>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[13px] font-semibold text-white break-words">{correoEntrante.asunto || '(sin asunto)'}</p>
+              <p className="text-[11px] text-gray-500 truncate mt-0.5">{correoEntrante.de}</p>
+              {correoEntrante.snippet && <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">{correoEntrante.snippet}</p>}
+              <button
+                onClick={() => onSendMessage?.(`Revisa el correo de "${correoEntrante.de}" con asunto "${correoEntrante.asunto}" y dime si es una oportunidad (léelo completo con leer_emails_gmail).`)}
+                className="mt-3 flex items-center gap-1 text-[11px] text-[#4ade80] hover:text-[#86efac] transition-colors"
+              >
+                <Search className="w-3 h-3" /> Detectar oportunidad
+              </button>
+            </div>
           </div>
         )}
         {productosPreview && productosPreview.length > 0 && (
