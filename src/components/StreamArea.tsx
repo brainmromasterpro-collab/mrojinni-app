@@ -85,6 +85,80 @@ function OportunidadesWidget({ data }: { data: OportunidadesData }) {
   );
 }
 
+interface OportunidadCampo { nombre?: string; ok?: boolean; valor?: string }
+interface OportunidadData {
+  es_oportunidad?: boolean; resumen?: string; remitente?: string; correo?: string; empresa?: string;
+  campos?: OportunidadCampo[]; completa?: boolean; faltan?: string[]; es_cliente?: boolean;
+  accion?: string; borrador?: { para?: string; asunto?: string; cuerpo?: string };
+}
+function OportunidadWidget({ data }: { data: OportunidadData }) {
+  const [showBorrador, setShowBorrador] = useState(false);
+  const b = data.borrador;
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 min-w-0">
+          <span className="text-[13px]">{data.es_oportunidad ? '🎯' : '📭'}</span>
+          <span className="text-[12px] font-semibold text-white truncate">
+            {data.es_oportunidad ? 'Oportunidad detectada' : 'No es una oportunidad'}
+          </span>
+        </span>
+        {data.es_oportunidad && (
+          <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${data.completa ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+            {data.completa ? '✓ Completa' : 'Incompleta'}
+          </span>
+        )}
+      </div>
+      <div className="p-3 space-y-2.5">
+        {(data.remitente || data.empresa) && (
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-white truncate">{data.empresa || data.remitente}</p>
+            <p className="text-[11px] text-gray-500 truncate">
+              {data.remitente}{data.correo ? ` · ${data.correo}` : ''}
+              {' · '}{data.es_cliente ? <span className="text-emerald-400">Cliente en CRM</span> : <span className="text-gray-400">No es cliente aún</span>}
+            </p>
+          </div>
+        )}
+        {data.resumen && <p className="text-[11px] text-gray-400 leading-relaxed">{data.resumen}</p>}
+        {data.campos && data.campos.length > 0 && (
+          <div className="bg-[#252527] border border-[#333] rounded-lg p-2.5 space-y-1">
+            {data.campos.map((c, i) => (
+              <div key={i} className="flex items-start gap-2 text-[11px] leading-snug">
+                <span className={`shrink-0 ${c.ok ? 'text-emerald-400' : 'text-red-400'}`}>{c.ok ? '✓' : '✗'}</span>
+                <span className="text-gray-400 shrink-0">{c.nombre}</span>
+                {c.valor && <span className="text-gray-300 min-w-0">— {c.valor}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+        {data.faltan && data.faltan.length > 0 && (
+          <p className="text-[11px] text-amber-400/90">Faltan: {data.faltan.join(', ')}</p>
+        )}
+        {data.accion && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-gray-500 uppercase tracking-wide">Acción</span>
+            <span className="text-[11px] text-[#a78bfa] font-medium">{data.accion}</span>
+          </div>
+        )}
+        {b && (b.cuerpo || b.asunto) && (
+          <div className="border-t border-[#2c2c2e] pt-2">
+            <button onClick={() => setShowBorrador((v) => !v)} className="text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+              {showBorrador ? '▾ ocultar borrador' : '▸ ver borrador de respuesta'}
+            </button>
+            {showBorrador && (
+              <div className="mt-2 bg-[#161618] border border-[#333] rounded-lg p-2.5 space-y-1">
+                {b.para && <p className="text-[11px] text-gray-500">Para: <span className="text-gray-300">{b.para}</span></p>}
+                {b.asunto && <p className="text-[11px] text-gray-500">Asunto: <span className="text-gray-300">{b.asunto}</span></p>}
+                {b.cuerpo && <p className="text-[11px] text-gray-300 leading-relaxed whitespace-pre-wrap mt-1.5">{b.cuerpo}</p>}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface OportunidadCreadaData {
   empresa?: string; oportunidad?: string; oportunidad_url?: string;
   cuenta_url?: string; contacto?: string; contacto_url?: string;
@@ -1119,6 +1193,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   const correoEntrante = (correoRes?.json || null) as { de?: string; asunto?: string; snippet?: string; gmail_id?: string } | null;
   const oportRes = extractMarkerJson(rawText, '[OPORTUNIDADES]');
   const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
+  const oportUnoRes = extractMarkerJson(rawText, '[OPORTUNIDAD]');
+  const oportunidadData: OportunidadData | null = oportUnoRes?.json || null;
   const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
   const oportCreadaData: OportunidadCreadaData | null = oportCreadaRes?.json || null;
   let displayText = rawText
@@ -1129,6 +1205,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (oportCreadaRes) displayText = displayText.replace(oportCreadaRes.raw, '').trimEnd();
   if (productosRes) displayText = displayText.replace(productosRes.raw, '').trimEnd();
   if (correoRes) displayText = displayText.replace(correoRes.raw, '').trimEnd();
+  if (oportUnoRes) displayText = displayText.replace(oportUnoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1141,6 +1218,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
         <span className="text-white text-[11px] font-bold">&#x2B21;</span>
       </div>
       <div className="max-w-[80%] space-y-2">
+        {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
         {productoPreview && (
