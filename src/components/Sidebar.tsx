@@ -1,11 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3 } from 'lucide-react';
+import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3, Mail, MessageCircle, Search, FileText, ClipboardList, MessagesSquare } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import type { Stream } from '../lib/types';
 
 interface SidebarProps {
   activeNav: string;
   onNavSelect: (id: string) => void;
+  streams: Stream[];
+  activeStreamId: string | null;
+  onSelectStream: (id: string) => void;
 }
+
+// Ícono por tipo de stream (para la lista de streams abiertos en el nav izquierdo).
+const TIPO_ICON: Record<string, React.ElementType> = {
+  correo: Mail, whatsapp: MessageCircle, busquedas: Search, publicacion: Package,
+  cotizacion: FileText, catalogo: FolderOpen, ordenes: ClipboardList, mensajeria: Mail,
+};
 
 interface KpiTile {
   value: string;
@@ -35,7 +45,7 @@ function compact(n: number): string {
   return String(Math.round(n));
 }
 
-export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
+export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamId, onSelectStream }: SidebarProps) {
   const [kpis, setKpis] = useState<KpiTile[]>(PLACEHOLDER_KPIS);
 
   useEffect(() => {
@@ -142,10 +152,18 @@ export default function Sidebar({ activeNav, onNavSelect }: SidebarProps) {
 
       <Divider />
 
-      {/* Use case */}
+      {/* Streams abiertos (mismos que las tabs de arriba) */}
       <NavSection title="Use case - MRO">
-        <NavItem icon={Package} label="Ordenes" id="ordenes" active={activeNav === 'ordenes'} onClick={onNavSelect} />
-        <NavItem icon={FolderOpen} label="Catalogo" id="catalogo" active={activeNav === 'catalogo'} onClick={onNavSelect} />
+        {streams.map((s) => (
+          <NavItem
+            key={s.id}
+            icon={TIPO_ICON[s.tipo] || MessagesSquare}
+            label={s.nombre}
+            id={s.id}
+            active={activeNav === 'chat' && s.id === activeStreamId}
+            onClick={() => onSelectStream(s.id)}
+          />
+        ))}
       </NavSection>
 
       <Divider />
@@ -191,7 +209,7 @@ function NavItem({ icon: Icon, label, id, active, onClick }: {
       }`}
     >
       <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-      {label}
+      <span className="truncate min-w-0">{label}</span>
     </button>
   );
 }

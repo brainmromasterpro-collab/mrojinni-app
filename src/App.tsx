@@ -1768,7 +1768,7 @@ function AppContent() {
         onRenameStream={handleRenameStream}
       />
       <div className="flex flex-1 min-h-0">
-        <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} />
+        <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} streams={streams} activeStreamId={activeStreamId} onSelectStream={handleSelectStream} />
         {activeNav === 'dashboard' ? (
           <DashboardPanel />
         ) : activeNav === 'activity' ? (
