@@ -148,6 +148,7 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
     <aside className="hidden md:flex w-sidebar-r h-full bg-brain-dark border-l border-brain-card flex-col overflow-y-auto scrollbar-thin flex-shrink-0">
       {cfg ? (
         <>
+          {['correo', 'whatsapp', 'mensajeria'].includes(tipo || '') && <AutoDetectToggle streamId={streamId} />}
           <TypedAgentsSection streamId={streamId} cfg={cfg} />
           <LiveLogsSection streamId={streamId} />
           <Section title="Fuentes">
@@ -350,6 +351,37 @@ function AgentsSection({ streamId }: { streamId: string | null }) {
         </div>
       </div>
     </Section>
+  );
+}
+
+// Toggle "auto-detectar oportunidades": guarda streams.auto_detectar. El watcher (backend) lo lee
+// para disparar la detección al llegar un correo nuevo. Tolerante si la columna aún no existe.
+function AutoDetectToggle({ streamId }: { streamId: string | null }) {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    if (!streamId) return;
+    supabase.from('streams').select('*').eq('id', streamId).maybeSingle().then(({ data }) => {
+      setOn(!!(data as { auto_detectar?: boolean } | null)?.auto_detectar);
+    });
+  }, [streamId]);
+  async function toggle() {
+    if (!streamId) return;
+    const next = !on;
+    setOn(next);
+    const { error } = await supabase.from('streams').update({ auto_detectar: next }).eq('id', streamId);
+    if (error) { console.error('[auto_detectar] update falló (¿falta la columna?):', error.message); setOn(!next); }
+  }
+  return (
+    <div className="flex items-center justify-between px-4 py-2.5 border-b border-brain-card">
+      <span className="text-[10px] text-[#ccc]">Auto-detectar oportunidades</span>
+      <button
+        onClick={toggle}
+        aria-label="Auto-detectar oportunidades"
+        className={`relative w-8 h-[18px] rounded-full transition-colors flex-shrink-0 ${on ? 'bg-[#4ade80]' : 'bg-[#444]'}`}
+      >
+        <span className={`absolute top-[3px] w-3 h-3 rounded-full bg-white transition-all ${on ? 'left-[17px]' : 'left-[3px]'}`} />
+      </button>
+    </div>
   );
 }
 
