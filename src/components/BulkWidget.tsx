@@ -594,6 +594,22 @@ export default function BulkWidget({ bulkId }: BulkWidgetProps) {
                 </div>
               </button>
 
+              {/* Alerta orientativa: cuando no se encuentra, sugerir verificar los datos del RFQ */}
+              {status === 'no_results' && (
+                <div className="px-4 pb-2 pl-8">
+                  <p className="text-[10px] text-[#fbbf24] leading-snug">
+                    ⚠ No se encontró nada para <span className="font-mono">{rfq.modelo}</span>{rfq.marca ? ` · ${rfq.marca}` : ''}. Verifica el RFQ — el número de parte o la marca pueden tener un error. Corrige los datos y vuelve a buscar.
+                  </p>
+                </div>
+              )}
+              {status === 'image_pending' && !isExpanded && (
+                <div className="px-4 pb-2 pl-8">
+                  <p className="text-[10px] text-[#fb923c] leading-snug">
+                    ⚠ No se encontró imagen. Verifica que el producto exista y que los datos sean correctos, o sube una foto manual.
+                  </p>
+                </div>
+              )}
+
               {/* Expanded: already in CRM catalog */}
               {isExpanded && status === 'in_crm' && crmOpcion && (
                 <div className="bg-[#1a1a1a] border-t border-[#2a2a2a] px-4 py-3 pl-8">
