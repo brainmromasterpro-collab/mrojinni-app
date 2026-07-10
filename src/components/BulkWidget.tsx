@@ -49,6 +49,7 @@ function getRowStatus(rfq: RFQRow): RowStatus {
   if (rfq.estado === 'publicacion_fallida') return 'publish_failed';
   if (rfq.estado === 'imagen_fallida') return 'image_pending';
   if (rfq.estado === 'sin_imagen') return 'no_image';
+  if (rfq.estado === 'sin_resultado') return 'no_results';
   const searchingStates = ['recibido', 'buscando'];
   if (searchingStates.includes(rfq.estado || '')) return 'searching';
   const opciones = rfq.opciones || [];
