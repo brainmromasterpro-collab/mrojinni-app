@@ -235,9 +235,22 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const userScrolledUp = useRef(false);
+
+  // Detectar si el usuario scrolleó hacia arriba
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      userScrolledUp.current = distanceFromBottom > 80;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !userScrolledUp.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
