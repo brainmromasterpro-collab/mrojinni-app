@@ -10,6 +10,7 @@ const STREAM_TYPES: { tipo: string; label: string }[] = [
   { tipo: 'busquedas',   label: 'Búsquedas' },
   { tipo: 'publicacion', label: 'Publicación' },
   { tipo: 'cotizacion',  label: 'Cotización' },
+  { tipo: 'ordenes',     label: 'Sales Order' },
 ];
 
 interface TopBarProps {

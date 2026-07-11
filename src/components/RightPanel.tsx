@@ -60,6 +60,20 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
     fuentes: [{ icon: _DB, name: '1CRM · productos / precios' }],
     conectado: ['1CRM'],
   },
+  ordenes: {
+    label: 'Sales Order',
+    agentes: [
+      { key: 'lector',     label: 'Lector de correo (confirmaciones)' },
+      { key: 'detector',   label: 'Detector de SO' },
+      { key: 'creador_so', label: 'Creador de SO en 1CRM' },
+      { key: 'seguimiento', label: 'Seguimiento / estatus' },
+    ],
+    fuentes: [
+      { icon: _DB,   name: '1CRM · Órdenes / Cuentas / Contactos' },
+      { icon: _MAIL, name: 'Gmail · ventas@mromasterpro.com' },
+    ],
+    conectado: ['1CRM', 'Gmail'],
+  },
 };
 TIPO_CONFIG.mensajeria = TIPO_CONFIG.correo;
 TIPO_CONFIG.catalogo = {

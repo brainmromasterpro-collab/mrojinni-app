@@ -14,7 +14,7 @@ interface SidebarProps {
 // Ícono por tipo de stream (para la lista de streams abiertos en el nav izquierdo).
 const TIPO_ICON: Record<string, React.ElementType> = {
   correo: Mail, whatsapp: MessageCircle, busquedas: Search, publicacion: Package,
-  cotizacion: FileText, catalogo: FolderOpen, ordenes: ClipboardList, mensajeria: Mail,
+  cotizacion: FileText, catalogo: FolderOpen, ordenes: ClipboardList, mensajeria: Mail, sales_order: ClipboardList,
 };
 
 interface KpiTile {
