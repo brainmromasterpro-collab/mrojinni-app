@@ -12,6 +12,7 @@ import ActivityLogPanel from './components/ActivityLogPanel';
 import LoginPage from './components/LoginPage';
 import { supabase } from './lib/supabase';
 import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache, clearMessagesCache, deleteStreamMessages } from './lib/storage';
+import { estadoWorkers, despertarWorkers } from './lib/wake';
 import type { Stream, Message } from './lib/types';
 
 const ALLOWED_EMAILS = new Set([
@@ -44,14 +45,62 @@ const MAIN_STREAM: Stream = demoStreams[0];
 
 const demoMessages: Message[] = [];
 
+// El sistema se cierra solo tras varias horas sin actividad.
+const AUTO_LOGOUT_HORAS = 8;
+
+function BannerReactivando({ detalle }: { detalle: string }) {
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[100] bg-brain-accent/15 border-b border-brain-accent/40 px-4 py-2 flex items-center gap-2 text-[11px] text-white">
+      <div className="w-3 h-3 border-2 border-brain-accent border-t-transparent rounded-full animate-spin flex-shrink-0" />
+      <span>
+        Reactivando el sistema — llevaba <strong>{detalle}</strong> inactivo. Tus búsquedas y publicaciones
+        se procesan en cuanto termine.
+      </span>
+    </div>
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState<any>(undefined);
+  const [reactivando, setReactivando] = useState('');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => subscription.unsubscribe();
   }, []);
+
+  // Cierre automático por inactividad.
+  useEffect(() => {
+    if (!session) return;
+    let timer: number;
+    const reiniciar = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => supabase.auth.signOut(), AUTO_LOGOUT_HORAS * 3600 * 1000);
+    };
+    const eventos = ['mousedown', 'keydown', 'touchstart', 'focus'];
+    eventos.forEach((e) => window.addEventListener(e, reiniciar));
+    reiniciar();
+    return () => {
+      clearTimeout(timer);
+      eventos.forEach((e) => window.removeEventListener(e, reiniciar));
+    };
+  }, [session]);
+
+  // Al iniciar sesión: si el sistema lleva días dormido, se despierta SOLO. El cliente nunca
+  // tiene que entrar a Railway ni saber que Railway existe.
+  useEffect(() => {
+    if (!session || !ALLOWED_EMAILS.has(session?.user?.email ?? '')) return;
+    let cancelado = false;
+    (async () => {
+      const { dormidos, detalle } = await estadoWorkers();
+      if (cancelado || !dormidos) return;
+      setReactivando(detalle);
+      await despertarWorkers();
+      if (!cancelado) setReactivando('');
+    })();
+    return () => { cancelado = true; };
+  }, [session]);
 
   if (session === undefined) return (
     <div className="min-h-screen bg-brain-dark flex items-center justify-center">
@@ -65,7 +114,12 @@ export default function App() {
     return <LoginPage />;
   }
 
-  return <AppContent />;
+  return (
+    <>
+      {reactivando && <BannerReactivando detalle={reactivando} />}
+      <AppContent />
+    </>
+  );
 }
 
 function AppContent() {
