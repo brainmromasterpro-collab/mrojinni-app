@@ -14,7 +14,7 @@ import { supabase } from './supabase';
  * Para que el paso 2 funcione, el servicio de workers necesita un dominio público en Railway.
  * Esa URL va aquí abajo (setup de una sola vez; si está vacía, la app no rompe: solo no despierta).
  */
-const WORKERS_URL = ''; // ej: 'https://brain-workers-production.up.railway.app'
+const WORKERS_URL = 'https://bubbly-wholeness-production-f13d.up.railway.app';
 
 const HEARTBEAT_MAX_MIN = 3;   // los workers laten cada 60s
 const ESPERA_MAX_S = 90;       // cuánto esperamos a que revivan tras el ping
