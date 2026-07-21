@@ -1081,6 +1081,141 @@ interface ProdPreviewItem {
   descripcion?: string; caracteristicas?: string[]; url_origen?: string;
 }
 
+// ── Widget de COTEJO de ORDEN DE COMPRA (Fase 1: previo, no escribe al CRM) ──
+interface CotejoPOData {
+  po?: { cliente?: string; po_number?: string; moneda?: string; formato?: string; notas?: string };
+  cotejo?: {
+    cuenta?: { id: string; nombre: string; url: string } | null;
+    items?: {
+      part_number: string; part_number_cotizacion?: string;
+      cantidad_po?: number | null; cantidad_cotizacion?: number | null;
+      precio_po?: number | null; precio_cotizacion?: number | null; estado: string;
+      match_parcial?: boolean; cotizacion?: { id: string; nombre: string } | null; en_varias?: boolean;
+    }[];
+    cotizaciones_candidatas?: {
+      id: string; nombre: string; items_cubiertos: number; total_items_po: number;
+      valid_until?: string; quote_stage?: string; vigente?: boolean; motivo?: string; url: string;
+    }[];
+    discrepancias?: string[];
+    todo_ok?: boolean;
+    resumen?: string;
+    avisos?: string[];
+  };
+}
+
+function CotejoPOWidget({ data }: { data: CotejoPOData }) {
+  const po = data.po || {};
+  const c = data.cotejo || {};
+  const items = c.items || [];
+  const cands = c.cotizaciones_candidatas || [];
+  const disc = c.discrepancias || [];
+  const money = (n?: number | null) =>
+    (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  const badge = (e: string) =>
+    e === 'ok' ? { t: 'OK', c: 'bg-[#39FF14]/15 text-[#39FF14]' }
+      : e === 'precio_distinto' ? { t: 'Precio ≠', c: 'bg-amber-400/15 text-amber-300' }
+        : { t: 'No está', c: 'bg-red-500/15 text-red-400' };
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">🧾</span>
+        <span className="text-[12px] font-semibold text-white">Orden de compra</span>
+        {po.po_number && <span className="text-[11px] font-mono text-gray-400">· {po.po_number}</span>}
+        {po.formato && <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-600">{po.formato}</span>}
+      </div>
+
+      {/* Cliente / cuenta */}
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] text-[12px]">
+        <span className="text-gray-500">Cliente </span>
+        <span className="text-gray-200">{po.cliente || '—'}</span>
+        {c.cuenta ? (
+          <a href={c.cuenta.url} target="_blank" rel="noreferrer" className="ml-2 text-[#6B58FF] hover:underline">✓ cuenta en CRM</a>
+        ) : (
+          <span className="ml-2 text-red-400">⚠ sin cuenta en CRM</span>
+        )}
+      </div>
+
+      {/* Avisos duros (p.ej. cuenta no encontrada) */}
+      {(c.avisos || []).length > 0 && (
+        <div className="px-4 py-2.5 border-b border-[#2c2c2e] bg-red-500/5">
+          {(c.avisos || []).map((a, i) => <p key={i} className="text-[12px] text-red-300">{a}</p>)}
+        </div>
+      )}
+
+      {/* Tabla de productos */}
+      {items.length > 0 && (
+        <div className="px-2 py-1 overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="text-gray-600 text-[10px] uppercase tracking-wider">
+                <th className="text-left font-medium px-2 py-1.5">Parte</th>
+                <th className="text-right font-medium px-2 py-1.5">Cant. PO</th>
+                <th className="text-right font-medium px-2 py-1.5">Precio PO</th>
+                <th className="text-right font-medium px-2 py-1.5">Precio cotiz.</th>
+                <th className="text-left font-medium px-2 py-1.5">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, i) => {
+                const b = it.match_parcial ? { t: '≈ Verificar', c: 'bg-amber-400/15 text-amber-300' } : badge(it.estado);
+                const distinta = it.part_number_cotizacion && it.part_number_cotizacion !== it.part_number;
+                return (
+                  <tr key={i} className="border-t border-[#2c2c2e]/60">
+                    <td className="px-2 py-1.5 font-mono text-gray-200">
+                      {it.part_number}
+                      {distinta && <span className="block text-[10px] text-amber-400/70">cotiz.: {it.part_number_cotizacion}</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-gray-300">{it.cantidad_po ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-right text-gray-300">{money(it.precio_po)}</td>
+                    <td className={`px-2 py-1.5 text-right ${it.estado === 'precio_distinto' ? 'text-amber-300' : 'text-gray-300'}`}>{money(it.precio_cotizacion)}</td>
+                    <td className="px-2 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${b.c}`}>{b.t}</span></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Cotizaciones candidatas */}
+      {cands.length > 0 && (
+        <div className="px-4 py-2.5 border-t border-[#2c2c2e]">
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">Cotización de referencia (candidatas)</p>
+          <div className="space-y-1">
+            {cands.map((q) => (
+              <div key={q.id} className="flex items-center gap-2 text-[12px]">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-[#39FF14]' : 'bg-red-500'}`} />
+                <a href={q.url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">{q.nombre}</a>
+                <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
+                <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-red-400'}`}>
+                  {q.vigente ? (q.valid_until ? `vigente ${q.valid_until}` : 'vigente') : (q.motivo || 'no vigente')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Discrepancias */}
+      {disc.length > 0 && (
+        <div className="px-4 py-2.5 border-t border-[#2c2c2e] bg-amber-400/5">
+          <p className="text-[10px] uppercase tracking-wider text-amber-500/80 mb-1">Revisar antes de continuar</p>
+          {disc.map((d, i) => <p key={i} className="text-[12px] text-amber-200/90 leading-snug">• {d}</p>)}
+        </div>
+      )}
+
+      {/* Pie: resumen + nota de fase */}
+      <div className="px-4 py-2 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className={`text-[12px] ${c.todo_ok ? 'text-[#39FF14]' : 'text-gray-400'}`}>
+          {c.todo_ok ? '✓ Todo coincide' : (c.resumen || 'Cotejo completado')}
+        </span>
+        <span className="ml-auto text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
+      </div>
+    </div>
+  );
+}
+
 // Widget bulk de productos extraídos de varios links: cada fila tiene su propio botón Publicar
 // (secuencial). Al publicar, se manda un mensaje al chat para que el backend publique ESE producto.
 function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
@@ -1215,6 +1350,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   const oportunidadData: OportunidadData | null = oportUnoRes?.json || null;
   const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
   const oportCreadaData: OportunidadCreadaData | null = oportCreadaRes?.json || null;
+  const cotejoRes = extractMarkerJson(rawText, '[COTEJO_PO]');
+  const cotejoPOData: CotejoPOData | null = cotejoRes?.json || null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -1224,6 +1361,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (productosRes) displayText = displayText.replace(productosRes.raw, '').trimEnd();
   if (correoRes) displayText = displayText.replace(correoRes.raw, '').trimEnd();
   if (oportUnoRes) displayText = displayText.replace(oportUnoRes.raw, '').trimEnd();
+  if (cotejoRes) displayText = displayText.replace(cotejoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1234,6 +1372,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     <div className="flex items-start gap-2.5">
       <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
       <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
+        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}

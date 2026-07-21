@@ -1137,6 +1137,25 @@ function AppContent() {
     const isDocument = /\.(docx?|xlsx?)$/i.test(file.name) || /word|spreadsheet|excel/i.test(file.type);
     const isText = /\.txt$/i.test(file.name) || file.type === 'text/plain';
 
+    // ORDEN DE COMPRA (stream 'ordenes'): un PDF/Excel/Word aquí es un PO → va al pipeline de Sales
+    // Order (leer + cotejar contra las cotizaciones del cliente). El backend lo detecta por metadata.
+    const isPO = /\.(pdf|docx?|xlsx?)$/i.test(file.name) || /pdf|word|spreadsheet|excel/i.test(file.type);
+    const streamTipo = activeStream?.tipo;
+    if (streamTipo === 'ordenes' && isPO && !file.url.startsWith('blob:')) {
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: `📄 Leyendo la orden de compra «${file.name}» y cotejando contra las cotizaciones del cliente…`, status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || `Orden de compra subida: ${file.name}`,
+        procesado: false,
+        metadata: { file_url: file.url, file_name: file.name, file_mime: file.type },
+      });
+      return;
+    }
+
     // .txt con links → leer el contenido y mandarlo al chat como mensaje: el modelo detecta los
     // links y corre el flujo de publicar (uno o varios → bulk). No requiere dependencias nuevas.
     if (isText) {
