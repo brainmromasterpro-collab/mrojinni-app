@@ -1095,6 +1095,7 @@ interface CotejoPOData {
     cotizaciones_candidatas?: {
       id: string; nombre: string; items_cubiertos: number; total_items_po: number;
       valid_until?: string; quote_stage?: string; vigente?: boolean; motivo?: string; url: string;
+      referenciada?: boolean;
     }[];
     discrepancias?: string[];
     todo_ok?: boolean;
@@ -1187,6 +1188,7 @@ function CotejoPOWidget({ data }: { data: CotejoPOData }) {
               <div key={q.id} className="flex items-center gap-2 text-[12px]">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-[#39FF14]' : 'bg-red-500'}`} />
                 <a href={q.url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">{q.nombre}</a>
+                {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-[#6B58FF]/20 text-[#6B58FF]">★ citada en el PO</span>}
                 <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
                 <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-red-400'}`}>
                   {q.vigente ? (q.valid_until ? `vigente ${q.valid_until}` : 'vigente') : (q.motivo || 'no vigente')}
