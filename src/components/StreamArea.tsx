@@ -1101,12 +1101,60 @@ interface CotejoPOData {
     todo_ok?: boolean;
     resumen?: string;
     avisos?: string[];
+    so_draft?: SODraft | null;
   };
 }
 
-function CotejoPOWidget({ data }: { data: CotejoPOData }) {
+interface SODraft {
+  puede_crear?: boolean;
+  cuenta_id: string; cuenta_nombre: string;
+  quote_id: string; quote_nombre: string;
+  quote_vigente?: boolean; quote_stage?: string; quote_referenciada?: boolean;
+  currency_id?: string; moneda?: string; terms?: string;
+  po_number?: string; para_nosotros?: boolean | null;
+  lineas: { part_number: string; descripcion?: string; unit_price?: number | null;
+            quote_qty?: number | null; po_qty?: number | null; pedido?: boolean;
+            incluir_default?: boolean; cantidad?: number | null }[];
+  origen?: Record<string, string>;
+}
+
+function Prov({ label, val, src }: { label: string; val?: string; src?: string }) {
+  return (
+    <div>
+      <span className="text-gray-500">{label}: </span>
+      <span className="text-gray-200">{val || '—'}</span>
+      {src && <span className="block text-[10px] text-gray-600">{src}</span>}
+    </div>
+  );
+}
+
+function CotejoPOWidget({ data, streamId }: { data: CotejoPOData; streamId?: string }) {
   const po = data.po || {};
   const c = data.cotejo || {};
+  const draft = c.so_draft || null;
+  const [showPrev, setShowPrev] = useState(false);
+  const [incluidas, setIncluidas] = useState<Set<string>>(
+    () => new Set((draft?.lineas || []).filter((l) => l.incluir_default).map((l) => l.part_number)));
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+
+  async function confirmarCrear() {
+    if (!draft || !streamId) return;
+    setEstado('creando');
+    const lineas = (draft.lineas || []).map((l) => ({
+      part_number: l.part_number, cantidad: l.cantidad, incluir: incluidas.has(l.part_number),
+    }));
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user',
+      content: `Crear Sales Order (PO ${draft.po_number || ''})`,
+      procesado: false,
+      metadata: { so_action: 'crear', draft: {
+        cuenta_id: draft.cuenta_id, currency_id: draft.currency_id, terms: draft.terms,
+        po_number: draft.po_number, quote_id: draft.quote_id, lineas,
+      } },
+    });
+    setEstado('listo');
+  }
+
   const items = c.items || [];
   const cands = c.cotizaciones_candidatas || [];
   const disc = c.discrepancias || [];
@@ -1207,12 +1255,81 @@ function CotejoPOWidget({ data }: { data: CotejoPOData }) {
         </div>
       )}
 
-      {/* Pie: resumen + nota de fase */}
-      <div className="px-4 py-2 border-t border-[#2c2c2e] flex items-center gap-2">
-        <span className={`text-[12px] ${c.todo_ok ? 'text-[#39FF14]' : 'text-gray-400'}`}>
-          {c.todo_ok ? '✓ Todo coincide' : (c.resumen || 'Cotejo completado')}
-        </span>
-        <span className="ml-auto text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
+      {/* Generar Sales Order (Fase 2) — botón + previo interactivo */}
+      {draft ? (
+        <div className="border-t border-[#2c2c2e]">
+          {!showPrev ? (
+            <div className="px-4 py-2.5 flex items-center gap-2">
+              <span className="text-[12px] text-gray-400">{c.resumen}</span>
+              <button onClick={() => setShowPrev(true)}
+                className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#6B58FF] text-white hover:bg-[#5a49e0] transition-colors">
+                Generar Sales Order
+              </button>
+            </div>
+          ) : (
+            <div className="px-4 py-3 space-y-3">
+              <p className="text-[11px] uppercase tracking-wider text-[#6B58FF]">Previo de la Sales Order</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                <Prov label="Cliente" val={draft.cuenta_nombre} src={draft.origen?.cuenta} />
+                <Prov label="Cotización" val={draft.quote_nombre} src={draft.origen?.cotizacion} />
+                <Prov label="Nº orden" val={draft.po_number} src={draft.origen?.po_number} />
+                <Prov label="Moneda" val={draft.moneda} src={draft.origen?.moneda} />
+                <Prov label="Términos" val={draft.terms || '—'} src={draft.origen?.terminos} />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-gray-600">Productos (elige cuáles van a la orden)</p>
+                {(draft.lineas || []).map((l) => (
+                  <label key={l.part_number} className="flex items-center gap-2 text-[12px] cursor-pointer">
+                    <input type="checkbox" checked={incluidas.has(l.part_number)}
+                      onChange={(e) => setIncluidas((prev) => { const n = new Set(prev); if (e.target.checked) n.add(l.part_number); else n.delete(l.part_number); return n; })}
+                      className="accent-[#6B58FF]" />
+                    <span className="font-mono text-gray-200">{l.part_number}</span>
+                    <span className={`text-[10px] px-1 rounded ${l.pedido ? 'bg-[#39FF14]/15 text-[#39FF14]' : 'bg-gray-600/20 text-gray-500'}`}>
+                      {l.pedido ? 'pedido' : 'no pedido'}
+                    </span>
+                    <span className="ml-auto text-gray-400">qty {l.cantidad} · ${(l.unit_price ?? 0).toLocaleString('es-MX')}</span>
+                  </label>
+                ))}
+              </div>
+              {!draft.puede_crear && (
+                <p className="text-[11px] text-amber-300">
+                  ⚠ No se puede crear aún: {draft.quote_vigente === false ? 'la cotización de referencia está vencida' : draft.para_nosotros === false ? 'confirma que la orden es para nosotros' : 'revisa las discrepancias'}.
+                </p>
+              )}
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={() => setShowPrev(false)} className="text-[12px] text-gray-500 hover:text-gray-300">Cancelar</button>
+                <button onClick={confirmarCrear} disabled={!draft.puede_crear || estado !== 'idle' || incluidas.size === 0}
+                  className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+                  {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar y crear en 1CRM'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="px-4 py-2 border-t border-[#2c2c2e] flex items-center gap-2">
+          <span className={`text-[12px] ${c.todo_ok ? 'text-[#39FF14]' : 'text-gray-400'}`}>
+            {c.todo_ok ? '✓ Todo coincide' : (c.resumen || 'Cotejo completado')}
+          </span>
+          <span className="ml-auto text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SOCreadaWidget({ data }: { data: { so_numero?: string | number; nombre?: string; url: string; lineas_finales?: number } }) {
+  return (
+    <div className="bg-[#1c1c1e] border border-[#39FF14]/30 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>✅</span>
+        <span className="text-[13px] font-semibold text-white">Sales Order creada</span>
+        {data.so_numero !== undefined && <span className="text-[12px] font-mono text-gray-400">#{data.so_numero}</span>}
+      </div>
+      <div className="px-4 pb-3 text-[12px] text-gray-300 space-y-1">
+        {data.nombre && <p className="break-words">{data.nombre}</p>}
+        <p className="text-gray-500">{data.lineas_finales} línea(s) · cotización marcada Aceptada</p>
+        {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="inline-block text-[#6B58FF] hover:underline">Ver en 1CRM →</a>}
       </div>
     </div>
   );
@@ -1354,6 +1471,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   const oportCreadaData: OportunidadCreadaData | null = oportCreadaRes?.json || null;
   const cotejoRes = extractMarkerJson(rawText, '[COTEJO_PO]');
   const cotejoPOData: CotejoPOData | null = cotejoRes?.json || null;
+  const soCreadaRes = extractMarkerJson(rawText, '[SO_CREADA]');
+  const soCreadaData = (soCreadaRes?.json || null) as { so_numero?: string | number; nombre?: string; url: string; lineas_finales?: number } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -1364,6 +1483,7 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (correoRes) displayText = displayText.replace(correoRes.raw, '').trimEnd();
   if (oportUnoRes) displayText = displayText.replace(oportUnoRes.raw, '').trimEnd();
   if (cotejoRes) displayText = displayText.replace(cotejoRes.raw, '').trimEnd();
+  if (soCreadaRes) displayText = displayText.replace(soCreadaRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1374,7 +1494,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     <div className="flex items-start gap-2.5">
       <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
       <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
-        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} />}
+        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} />}
+        {soCreadaData && <SOCreadaWidget data={soCreadaData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
