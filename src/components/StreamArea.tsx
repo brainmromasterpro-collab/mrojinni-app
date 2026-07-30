@@ -221,7 +221,7 @@ const FILE_ACCEPT = '.txt,.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,
 const TIPO_LABEL: Record<string, string> = {
   correo: 'Correo', whatsapp: 'WhatsApp', busquedas: 'Búsquedas', publicacion: 'Publicación',
   cotizacion: 'Cotización', mensajeria: 'Mensajería', catalogo: 'Catálogo',
-  compras: 'General', general: 'General', generico: 'General',
+  ordenes: 'Sales Order', compras: 'Compras', general: 'General', generico: 'General',
 };
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
@@ -1118,6 +1118,29 @@ interface SODraft {
   origen?: Record<string, string>;
 }
 
+interface CotejoProveedorLink {
+  ok: boolean; url: string; nombre?: string; marca?: string; part_number?: string;
+  precio_costo?: string | number; moneda?: string; imagen_url?: string;
+  part_number_so?: string; descripcion_so?: string; tipo_match?: string; match_parcial?: boolean;
+}
+interface CotejoProveedorGrupo {
+  so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
+  cliente?: string; currency_id?: string;
+  ya_comprado?: { id: string; nombre: string; url: string } | null;
+  proveedor_nombre?: string;
+  lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
+  links: CotejoProveedorLink[];
+}
+interface CotejoProveedorData {
+  links?: CotejoProveedorLink[];
+  cotejo?: {
+    error?: string;
+    grupos?: CotejoProveedorGrupo[];
+    sin_match?: CotejoProveedorLink[];
+    resumen?: string;
+  };
+}
+
 function Prov({ label, val, src }: { label: string; val?: string; src?: string }) {
   return (
     <div>
@@ -1335,6 +1358,144 @@ function SOCreadaWidget({ data }: { data: { so_numero?: string | number; nombre?
   );
 }
 
+// Compra a proveedor (stream 'compras'): agrupa los links leídos por la Sales Order con la que
+// machearon. El usuario incluye/excluye grupos con checkbox (ej. si ya_comprado, arranca sin
+// marcar para no duplicar sin querer) y confirma UNA vez — crea un PO+Bill por cada grupo incluido.
+function CotejoProveedorWidget({ data, streamId }: { data: CotejoProveedorData; streamId?: string }) {
+  const c = data.cotejo || {};
+  const grupos = c.grupos || [];
+  const sinMatch = c.sin_match || [];
+  const [incluidos, setIncluidos] = useState<Set<string>>(
+    () => new Set(grupos.filter((g) => !g.ya_comprado).map((g) => g.so_id)));
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const money = (n?: number | string | null) =>
+    (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+
+  async function confirmarCrear() {
+    if (!streamId || incluidos.size === 0) return;
+    setEstado('creando');
+    const drafts = grupos.filter((g) => incluidos.has(g.so_id)).map((g) => ({
+      so_id: g.so_id, proveedor_nombre: g.proveedor_nombre, currency_id: g.currency_id,
+      lineas: g.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
+    }));
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user',
+      content: `Crear ${drafts.length} orden(es) de compra`,
+      procesado: false,
+      metadata: { po_action: 'crear', grupos: drafts },
+    });
+    setEstado('listo');
+  }
+
+  if (c.error) {
+    return (
+      <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[12px] text-red-300">
+        {c.error}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">🛒</span>
+        <span className="text-[12px] font-semibold text-white">Compra a proveedor</span>
+        <span className="ml-auto text-[10px] text-gray-600">{c.resumen}</span>
+      </div>
+
+      {grupos.map((g) => (
+        <div key={g.so_id} className="px-4 py-2.5 border-b border-[#2c2c2e]/60">
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input type="checkbox" checked={incluidos.has(g.so_id)}
+              onChange={(e) => setIncluidos((prev) => { const n = new Set(prev); if (e.target.checked) n.add(g.so_id); else n.delete(g.so_id); return n; })}
+              className="accent-[#6B58FF] mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[12px]">
+                <a href={g.so_url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">
+                  {g.so_nombre} {g.so_numero !== undefined && `· #${g.so_numero}`}
+                </a>
+                {g.cliente && <span className="text-gray-500 flex-shrink-0">{g.cliente}</span>}
+                {g.ya_comprado && (
+                  <a href={g.ya_comprado.url} target="_blank" rel="noreferrer"
+                    className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 hover:underline">
+                    ⚠ ya hay un PO para esta SO
+                  </a>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Proveedor <span className="text-gray-300">{g.proveedor_nombre || '—'}</span>
+              </p>
+              <div className="mt-1 space-y-0.5">
+                {g.links.map((l, i) => (
+                  <div key={i} className="flex items-center gap-2 text-[11px]">
+                    <a href={l.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-[#6B58FF] truncate max-w-[240px]">
+                      {l.nombre || l.url}
+                    </a>
+                    <span className="font-mono text-gray-500">{l.part_number}</span>
+                    {l.match_parcial && (
+                      <span className="px-1 py-0.5 rounded text-[10px] bg-amber-400/15 text-amber-300">≈ verificar</span>
+                    )}
+                    <span className="ml-auto text-gray-500 flex-shrink-0">{money(l.precio_costo)} {l.moneda}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </label>
+        </div>
+      ))}
+
+      {sinMatch.length > 0 && (
+        <div className="px-4 py-2.5 border-b border-[#2c2c2e]/60 bg-amber-400/5">
+          <p className="text-[10px] uppercase tracking-wider text-amber-500/80 mb-1">
+            Sin Sales Order — ¿es un gasto general?
+          </p>
+          {sinMatch.map((l, i) => (
+            <p key={i} className="text-[11px] text-amber-200/80 truncate">• {l.nombre || l.url}</p>
+          ))}
+        </div>
+      )}
+
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
+        <button onClick={confirmarCrear} disabled={incluidos.size === 0 || estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : `Confirmar y crear ${incluidos.size || ''} PO(s)`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function POCreadoWidget({ data }: { data: { resultados?: { ok?: boolean; error?: string; po_url?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }[] } }) {
+  const resultados = data.resultados || [];
+  return (
+    <div className="bg-[#1c1c1e] border border-[#39FF14]/30 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>✅</span>
+        <span className="text-[13px] font-semibold text-white">Purchase Order(s) creados</span>
+      </div>
+      <div className="px-4 pb-3 space-y-2">
+        {resultados.map((r, i) => (
+          <div key={i} className="text-[12px] text-gray-300 border-t border-[#2c2c2e] pt-2 first:border-0 first:pt-0">
+            {r.ok ? (
+              <>
+                <p className="text-gray-400">{r.proveedor} {r.total !== undefined && `· $${Number(r.total).toLocaleString('es-MX')}`}</p>
+                <div className="flex items-center gap-3 mt-0.5">
+                  {r.po_url && <a href={r.po_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Purchase Order →</a>}
+                  {r.bill_url && <a href={r.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
+                  {r.so_url && <a href={r.so_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Sales Order →</a>}
+                </div>
+              </>
+            ) : (
+              <p className="text-red-400">{r.error || 'No se pudo crear'}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // Widget bulk de productos extraídos de varios links: cada fila tiene su propio botón Publicar
 // (secuencial). Al publicar, se manda un mensaje al chat para que el backend publique ESE producto.
 function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
@@ -1473,6 +1634,10 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   const cotejoPOData: CotejoPOData | null = cotejoRes?.json || null;
   const soCreadaRes = extractMarkerJson(rawText, '[SO_CREADA]');
   const soCreadaData = (soCreadaRes?.json || null) as { so_numero?: string | number; nombre?: string; url: string; lineas_finales?: number } | null;
+  const cotejoProveedorRes = extractMarkerJson(rawText, '[COTEJO_PROVEEDOR]');
+  const cotejoProveedorData: CotejoProveedorData | null = cotejoProveedorRes?.json || null;
+  const poCreadoRes = extractMarkerJson(rawText, '[PO_CREADO]');
+  const poCreadoData = (poCreadoRes?.json || null) as { resultados?: { ok?: boolean; error?: string; po_url?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }[] } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -1484,6 +1649,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (oportUnoRes) displayText = displayText.replace(oportUnoRes.raw, '').trimEnd();
   if (cotejoRes) displayText = displayText.replace(cotejoRes.raw, '').trimEnd();
   if (soCreadaRes) displayText = displayText.replace(soCreadaRes.raw, '').trimEnd();
+  if (cotejoProveedorRes) displayText = displayText.replace(cotejoProveedorRes.raw, '').trimEnd();
+  if (poCreadoRes) displayText = displayText.replace(poCreadoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1496,6 +1663,8 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
       <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
         {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} />}
         {soCreadaData && <SOCreadaWidget data={soCreadaData} />}
+        {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} />}
+        {poCreadoData && <POCreadoWidget data={poCreadoData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}

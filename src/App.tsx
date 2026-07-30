@@ -1825,6 +1825,7 @@ function AppContent() {
     const NOMBRES: Record<string, string> = {
       generico: 'Genérica', correo: 'Correo', whatsapp: 'WhatsApp',
       busquedas: 'Búsquedas', publicacion: 'Publicación', cotizacion: 'Cotización',
+      ordenes: 'Sales Order', compras: 'Compras',
     };
     // user_id real (auth) para que pase RLS y el backend lea el tipo; fallback al de un stream ya cargado.
     let uid = streams.find((s) => s.user_id && s.user_id !== 'demo')?.user_id || 'demo';
