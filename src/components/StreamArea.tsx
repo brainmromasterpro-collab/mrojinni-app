@@ -336,6 +336,8 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
   // Enruta lo seleccionado (drop/paste/picker): una imagen abre el modal de elección
   // (publicar al catálogo vs buscar RFQ); los documentos van directo a handleFilesSelected.
+  // EXCEPCIÓN: en el stream 'compras' una imagen NUNCA es "publicar catálogo" ni "buscar RFQ" —
+  // es comprobante/foto de recepción/factura, así que va directo (el backend decide qué es).
   function routeSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
@@ -345,6 +347,12 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       const dt = new DataTransfer();
       nonImgs.forEach((f) => dt.items.add(f));
       handleFilesSelected(dt.files);
+    }
+    if (imgs.length && stream?.tipo === 'compras') {
+      const dt = new DataTransfer();
+      imgs.forEach((f) => dt.items.add(f));
+      handleFilesSelected(dt.files);
+      return;
     }
     if (imgs.length) setPendingDropFile(imgs[0]); // una imagen a la vez → modal de intención
   }
@@ -549,7 +557,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       {/* Messages area */}
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-light py-6">
         <div className="max-w-3xl mx-auto px-6 space-y-4">
-          {messages.map((msg) => {
+          {messages.map((msg, msgIdx) => {
             if (msg.tipo === 'rfq-form') {
               return null;
             }
@@ -592,7 +600,19 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
             if (msg.tipo === 'rfq-log') {
               return <RFQLogBubble key={msg.id} message={msg} />;
             }
-            return <MessageBubble key={msg.id} message={msg} onSendMessage={onSendMessage} />;
+            // Un widget de "previo" (cotejo) no debe dejar el botón activo tras un refresh si ya
+            // hay una confirmación MÁS ADELANTE en el historial — el estado del botón vivía solo
+            // en React y se olvidaba al recargar la página, arriesgando doble creación.
+            const laterHasMarker = (marker: string) => messages.slice(msgIdx + 1).some((m) => {
+              const t = (m.contenido as any)?.text;
+              return typeof t === 'string' && t.includes(marker);
+            });
+            return <MessageBubble key={msg.id} message={msg} onSendMessage={onSendMessage}
+              yaConfirmadoSO={laterHasMarker('[SO_CREADA]')}
+              yaConfirmadoPO={laterHasMarker('[PO_CREADO]')}
+              yaConfirmadoPago={laterHasMarker('[PAGO_REGISTRADO]')}
+              yaConfirmadoRecepcion={laterHasMarker('[PO_RECIBIDO]')}
+              yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')} />;
           })}
 
         </div>
@@ -1151,14 +1171,16 @@ function Prov({ label, val, src }: { label: string; val?: string; src?: string }
   );
 }
 
-function CotejoPOWidget({ data, streamId }: { data: CotejoPOData; streamId?: string }) {
+function CotejoPOWidget({ data, streamId, yaConfirmado }: { data: CotejoPOData; streamId?: string; yaConfirmado?: boolean }) {
   const po = data.po || {};
   const c = data.cotejo || {};
   const draft = c.so_draft || null;
   const [showPrev, setShowPrev] = useState(false);
   const [incluidas, setIncluidas] = useState<Set<string>>(
     () => new Set((draft?.lineas || []).filter((l) => l.incluir_default).map((l) => l.part_number)));
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  // yaConfirmado viene del historial (¿ya hay un [SO_CREADA] más adelante en el stream?) — evita
+  // que un refresh de página reactive el botón y se dupliquen registros en el CRM.
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
 
   async function confirmarCrear() {
     if (!draft || !streamId) return;
@@ -1361,13 +1383,15 @@ function SOCreadaWidget({ data }: { data: { so_numero?: string | number; nombre?
 // Compra a proveedor (stream 'compras'): agrupa los links leídos por la Sales Order con la que
 // machearon. El usuario incluye/excluye grupos con checkbox (ej. si ya_comprado, arranca sin
 // marcar para no duplicar sin querer) y confirma UNA vez — crea un PO+Bill por cada grupo incluido.
-function CotejoProveedorWidget({ data, streamId }: { data: CotejoProveedorData; streamId?: string }) {
+function CotejoProveedorWidget({ data, streamId, yaConfirmado }: { data: CotejoProveedorData; streamId?: string; yaConfirmado?: boolean }) {
   const c = data.cotejo || {};
   const grupos = c.grupos || [];
   const sinMatch = c.sin_match || [];
   const [incluidos, setIncluidos] = useState<Set<string>>(
     () => new Set(grupos.filter((g) => !g.ya_comprado).map((g) => g.so_id)));
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  // yaConfirmado = ¿ya hay un [PO_CREADO] más adelante en el historial? Evita reactivar el botón
+  // al refrescar la página y crear el PO/Bill dos veces.
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | string | null) =>
     (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
@@ -1504,11 +1528,11 @@ interface CotejoPagoData {
   comprobante?: { monto?: number | null; moneda?: string; fecha?: string; referencia?: string; notas?: string; error?: string };
   cotejo?: { candidatas?: BillCandidata[]; multiples?: boolean; por_monto?: boolean };
 }
-function CotejoPagoWidget({ data, streamId }: { data: CotejoPagoData; streamId?: string }) {
+function CotejoPagoWidget({ data, streamId, yaConfirmado }: { data: CotejoPagoData; streamId?: string; yaConfirmado?: boolean }) {
   const comp = data.comprobante || {};
   const cands = data.cotejo?.candidatas || [];
   const [sel, setSel] = useState<string>(cands.length === 1 ? cands[0].id : '');
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | null) => (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
   async function confirmar() {
@@ -1592,10 +1616,10 @@ interface CotejoRecepcionData {
   contenido_foto?: { items_detectados?: string[]; notas?: string; error?: string } | null;
   candidatos?: POCandidata[];
 }
-function CotejoRecepcionWidget({ data, streamId }: { data: CotejoRecepcionData; streamId?: string }) {
+function CotejoRecepcionWidget({ data, streamId, yaConfirmado }: { data: CotejoRecepcionData; streamId?: string; yaConfirmado?: boolean }) {
   const candidatos = data.candidatos || [];
   const [sel, setSel] = useState<string>(candidatos.length === 1 ? candidatos[0].id : '');
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
   const foto = data.contenido_foto;
 
   async function confirmar() {
@@ -1664,12 +1688,12 @@ function PORecibidoWidget({ data }: { data: { ok?: boolean; error?: string; po_u
 // ETAPA 4 — CIERRE DE VENTA: elegir la Sales Order → confirmar entrega/factura → so_stage
 // ─────────────────────────────────────────────────────────────
 interface SOCandidata { id: string; nombre: string; so_stage?: string; cliente?: string; url?: string }
-function CotejoCierreWidget({ data, streamId }: { data: { candidatos?: SOCandidata[] }; streamId?: string }) {
+function CotejoCierreWidget({ data, streamId, yaConfirmado }: { data: { candidatos?: SOCandidata[] }; streamId?: string; yaConfirmado?: boolean }) {
   const candidatos = data.candidatos || [];
   const [sel, setSel] = useState<string>('');
   const [entregado, setEntregado] = useState(false);
   const [facturado, setFacturado] = useState(false);
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
 
   async function confirmar() {
     if (!sel || !streamId || (!entregado && !facturado)) return;
@@ -1828,7 +1852,16 @@ function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdP
   );
 }
 
-function MessageBubble({ message, onSendMessage }: { message: Message; onSendMessage?: (text: string) => void }) {
+interface MessageBubbleProps {
+  message: Message;
+  onSendMessage?: (text: string) => void;
+  yaConfirmadoSO?: boolean;
+  yaConfirmadoPO?: boolean;
+  yaConfirmadoPago?: boolean;
+  yaConfirmadoRecepcion?: boolean;
+  yaConfirmadoCierre?: boolean;
+}
+function MessageBubble({ message, onSendMessage, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -1915,15 +1948,15 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
     <div className="flex items-start gap-2.5">
       <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
       <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
-        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} />}
+        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} yaConfirmado={yaConfirmadoSO} />}
         {soCreadaData && <SOCreadaWidget data={soCreadaData} />}
-        {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} />}
+        {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPO} />}
         {poCreadoData && <POCreadoWidget data={poCreadoData} />}
-        {cotejoPagoData && <CotejoPagoWidget data={cotejoPagoData} streamId={message.stream_id} />}
+        {cotejoPagoData && <CotejoPagoWidget data={cotejoPagoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPago} />}
         {pagoRegistradoData && <PagoRegistradoWidget data={pagoRegistradoData} />}
-        {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} />}
+        {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoRecepcion} />}
         {poRecibidoData && <PORecibidoWidget data={poRecibidoData} />}
-        {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} />}
+        {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} />}
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
