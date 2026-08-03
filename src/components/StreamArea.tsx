@@ -207,6 +207,7 @@ interface StreamAreaProps {
   onActiveBulkIdChange: (id: string | null) => void;
   onSendMessage: (text: string) => void;
   onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string, intent?: 'publish' | 'quote') => void;
+  onProcesando?: (text: string) => void;
   onDecision: (messageId: string, approved: boolean) => void;
   onImagenDecision: (rfqId: string, approved: boolean) => Promise<void>;
   onImagenRetry: (rfqId: string) => Promise<void>;
@@ -225,7 +226,7 @@ const TIPO_LABEL: Record<string, string> = {
 };
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
-export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream }: StreamAreaProps) {
+export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onProcesando, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream }: StreamAreaProps) {
   const [input, setInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
@@ -607,7 +608,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
               const t = (m.contenido as any)?.text;
               return typeof t === 'string' && t.includes(marker);
             });
-            return <MessageBubble key={msg.id} message={msg} onSendMessage={onSendMessage}
+            return <MessageBubble key={msg.id} message={msg} onSendMessage={onSendMessage} onProcesando={onProcesando}
               yaConfirmadoSO={laterHasMarker('[SO_CREADA]')}
               yaConfirmadoPO={laterHasMarker('[PO_CREADO]')}
               yaConfirmadoPago={laterHasMarker('[PAGO_REGISTRADO]')}
@@ -1171,7 +1172,7 @@ function Prov({ label, val, src }: { label: string; val?: string; src?: string }
   );
 }
 
-function CotejoPOWidget({ data, streamId, yaConfirmado }: { data: CotejoPOData; streamId?: string; yaConfirmado?: boolean }) {
+function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoPOData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const po = data.po || {};
   const c = data.cotejo || {};
   const draft = c.so_draft || null;
@@ -1185,6 +1186,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado }: { data: CotejoPOData; 
   async function confirmarCrear() {
     if (!draft || !streamId) return;
     setEstado('creando');
+    onProcesando?.('🧾 Creando la Sales Order en 1CRM… Te aviso al terminar.');
     const lineas = (draft.lineas || []).map((l) => ({
       part_number: l.part_number, cantidad: l.cantidad, incluir: incluidas.has(l.part_number),
     }));
@@ -1383,7 +1385,7 @@ function SOCreadaWidget({ data }: { data: { so_numero?: string | number; nombre?
 // Compra a proveedor (stream 'compras'): agrupa los links leídos por la Sales Order con la que
 // machearon. El usuario incluye/excluye grupos con checkbox (ej. si ya_comprado, arranca sin
 // marcar para no duplicar sin querer) y confirma UNA vez — crea un PO+Bill por cada grupo incluido.
-function CotejoProveedorWidget({ data, streamId, yaConfirmado }: { data: CotejoProveedorData; streamId?: string; yaConfirmado?: boolean }) {
+function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoProveedorData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const c = data.cotejo || {};
   const grupos = c.grupos || [];
   const sinMatch = c.sin_match || [];
@@ -1391,13 +1393,14 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado }: { data: CotejoP
     () => new Set(grupos.filter((g) => !g.ya_comprado).map((g) => g.so_id)));
   // yaConfirmado = ¿ya hay un [PO_CREADO] más adelante en el historial? Evita reactivar el botón
   // al refrescar la página y crear el PO/Bill dos veces.
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | string | null) =>
     (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
   async function confirmarCrear() {
     if (!streamId || incluidos.size === 0) return;
     setEstado('creando');
+    onProcesando?.('🛒 Creando la(s) orden(es) de compra en 1CRM… Te aviso al terminar.');
     const drafts = grupos.filter((g) => incluidos.has(g.so_id)).map((g) => ({
       so_id: g.so_id, proveedor_nombre: g.proveedor_nombre, currency_id: g.currency_id,
       lineas: g.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
@@ -1409,6 +1412,15 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado }: { data: CotejoP
       metadata: { po_action: 'crear', grupos: drafts },
     });
     setEstado('listo');
+  }
+
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
+      metadata: { cancelar_accion: true },
+    });
   }
 
   if (c.error) {
@@ -1480,18 +1492,38 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado }: { data: CotejoP
       )}
 
       <div className="px-4 py-2.5 flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
+        <span className="text-[10px] text-gray-600">
+          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada en el CRM'}
+        </span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+            Ninguna coincide
+          </button>
+        )}
         <button onClick={confirmarCrear} disabled={incluidos.size === 0 || estado !== 'idle'}
-          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : `Confirmar y crear ${incluidos.size || ''} PO(s)`}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : `Confirmar y crear ${incluidos.size || ''} PO(s)`}
         </button>
       </div>
     </div>
   );
 }
 
-function POCreadoWidget({ data }: { data: { resultados?: { ok?: boolean; error?: string; po_url?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }[] } }) {
+interface POCreadoResultado { ok?: boolean; error?: string; po_id?: string; po_url?: string; bill_id?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }
+function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?: POCreadoResultado[] }; streamId?: string; onProcesando?: (text: string) => void }) {
   const resultados = data.resultados || [];
+  const [deshechos, setDeshechos] = useState<Set<number>>(new Set());
+
+  async function deshacer(i: number, r: POCreadoResultado) {
+    if (!streamId) return;
+    setDeshechos((prev) => new Set(prev).add(i));
+    onProcesando?.('↩️ Deshaciendo el Purchase Order y la cuenta por pagar…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer Purchase Order', procesado: false,
+      metadata: { po_action: 'deshacer', po_id: r.po_id, bill_id: r.bill_id },
+    });
+  }
+
   return (
     <div className="bg-[#1c1c1e] border border-[#39FF14]/30 rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 flex items-center gap-2">
@@ -1508,6 +1540,13 @@ function POCreadoWidget({ data }: { data: { resultados?: { ok?: boolean; error?:
                   {r.po_url && <a href={r.po_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Purchase Order →</a>}
                   {r.bill_url && <a href={r.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
                   {r.so_url && <a href={r.so_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Sales Order →</a>}
+                  {deshechos.has(i) ? (
+                    <span className="ml-auto text-[11px] text-gray-500">Deshecho</span>
+                  ) : (
+                    <button onClick={() => deshacer(i, r)} className="ml-auto text-[11px] text-red-400/80 hover:text-red-300">
+                      Deshacer
+                    </button>
+                  )}
                 </div>
               </>
             ) : (
@@ -1528,21 +1567,31 @@ interface CotejoPagoData {
   comprobante?: { monto?: number | null; moneda?: string; fecha?: string; referencia?: string; notas?: string; error?: string };
   cotejo?: { candidatas?: BillCandidata[]; multiples?: boolean; por_monto?: boolean };
 }
-function CotejoPagoWidget({ data, streamId, yaConfirmado }: { data: CotejoPagoData; streamId?: string; yaConfirmado?: boolean }) {
+function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoPagoData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const comp = data.comprobante || {};
   const cands = data.cotejo?.candidatas || [];
   const [sel, setSel] = useState<string>(cands.length === 1 ? cands[0].id : '');
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | null) => (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
 
   async function confirmar() {
     if (!sel || !streamId) return;
     setEstado('creando');
+    onProcesando?.('🧾 Registrando el pago… Te aviso al terminar.');
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Registrar pago', procesado: false,
       metadata: { pago_action: 'confirmar', bill_id: sel, monto: comp.monto, datos_comprobante: comp },
     });
     setEstado('listo');
+  }
+
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
+      metadata: { cancelar_accion: true },
+    });
   }
 
   if (comp.error) {
@@ -1574,17 +1623,34 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado }: { data: CotejoPagoDa
         ))}
       </div>
       <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">Previo · no se ha registrado nada</span>
+        <span className="text-[10px] text-gray-600">
+          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha registrado nada'}
+        </span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+            Ninguna coincide
+          </button>
+        )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
-          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-          {estado === 'creando' ? 'Registrando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar pago'}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? 'Registrando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar pago'}
         </button>
       </div>
     </div>
   );
 }
 
-function PagoRegistradoWidget({ data }: { data: { ok?: boolean; error?: string; payment_url?: string; bill_url?: string; monto?: number; aviso?: string } }) {
+function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; payment_id?: string; payment_url?: string; bill_url?: string; monto?: number; aviso?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Deshaciendo el pago…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer pago', procesado: false,
+      metadata: { pago_action: 'deshacer', payment_id: data.payment_id },
+    });
+  }
   return (
     <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
@@ -1598,6 +1664,8 @@ function PagoRegistradoWidget({ data }: { data: { ok?: boolean; error?: string; 
             <div className="flex items-center gap-3">
               {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Payment →</a>}
               {data.bill_url && <a href={data.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
+              {deshecho ? <span className="ml-auto text-[11px] text-gray-500">Deshecho</span> :
+                <button onClick={deshacer} className="ml-auto text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>}
             </div>
             {data.aviso && <p className="text-[11px] text-amber-300/80">{data.aviso}</p>}
           </>
@@ -1616,20 +1684,31 @@ interface CotejoRecepcionData {
   contenido_foto?: { items_detectados?: string[]; notas?: string; error?: string } | null;
   candidatos?: POCandidata[];
 }
-function CotejoRecepcionWidget({ data, streamId, yaConfirmado }: { data: CotejoRecepcionData; streamId?: string; yaConfirmado?: boolean }) {
+function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoRecepcionData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const candidatos = data.candidatos || [];
   const [sel, setSel] = useState<string>(candidatos.length === 1 ? candidatos[0].id : '');
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
   const foto = data.contenido_foto;
 
   async function confirmar() {
     if (!sel || !streamId) return;
     setEstado('creando');
+    onProcesando?.('📦 Cerrando la recepción del Purchase Order…');
+    const po = candidatos.find((p) => p.id === sel);
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Confirmar recepción', procesado: false,
-      metadata: { recepcion_action: 'confirmar', po_id: sel, tracking: data.tracking_texto || '' },
+      metadata: { recepcion_action: 'confirmar', po_id: sel, tracking: data.tracking_texto || '', estado_anterior: po?.shipping_stage || '' },
     });
     setEstado('listo');
+  }
+
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
+      metadata: { cancelar_accion: true },
+    });
   }
 
   return (
@@ -1661,23 +1740,43 @@ function CotejoRecepcionWidget({ data, streamId, yaConfirmado }: { data: CotejoR
         ))}
       </div>
       <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">Previo · no se ha cerrado nada</span>
+        <span className="text-[10px] text-gray-600">
+          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha cerrado nada'}
+        </span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+            Ninguna coincide
+          </button>
+        )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
-          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-          {estado === 'creando' ? 'Cerrando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirma que coincide y cierra'}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? 'Cerrando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirma que coincide y cierra'}
         </button>
       </div>
     </div>
   );
 }
 
-function PORecibidoWidget({ data }: { data: { ok?: boolean; error?: string; po_url?: string } }) {
+function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; estado_anterior?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Deshaciendo la recepción…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer recepción', procesado: false,
+      metadata: { recepcion_action: 'deshacer', po_id: data.po_id, estado_anterior: data.estado_anterior || '' },
+    });
+  }
   return (
     <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
         <span className="text-[13px] font-semibold text-white">{data.ok ? 'Purchase Order recibido' : 'No se pudo cerrar'}</span>
         {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        {data.ok && (deshecho
+          ? <span className="text-[11px] text-gray-500">Deshecho</span>
+          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
       </div>
       {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
     </div>
@@ -1688,21 +1787,32 @@ function PORecibidoWidget({ data }: { data: { ok?: boolean; error?: string; po_u
 // ETAPA 4 — CIERRE DE VENTA: elegir la Sales Order → confirmar entrega/factura → so_stage
 // ─────────────────────────────────────────────────────────────
 interface SOCandidata { id: string; nombre: string; so_stage?: string; cliente?: string; url?: string }
-function CotejoCierreWidget({ data, streamId, yaConfirmado }: { data: { candidatos?: SOCandidata[] }; streamId?: string; yaConfirmado?: boolean }) {
+function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { data: { candidatos?: SOCandidata[] }; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const candidatos = data.candidatos || [];
   const [sel, setSel] = useState<string>('');
   const [entregado, setEntregado] = useState(false);
   const [facturado, setFacturado] = useState(false);
-  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
 
   async function confirmar() {
     if (!sel || !streamId || (!entregado && !facturado)) return;
     setEstado('creando');
+    onProcesando?.('📄 Actualizando el cierre de la venta…');
+    const so = candidatos.find((s) => s.id === sel);
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Actualizar cierre de venta', procesado: false,
-      metadata: { cierre_action: 'confirmar', so_id: sel, entregado, facturado },
+      metadata: { cierre_action: 'confirmar', so_id: sel, entregado, facturado, estado_anterior: so?.so_stage || '' },
     });
     setEstado('listo');
+  }
+
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
+      metadata: { cancelar_accion: true },
+    });
   }
 
   return (
@@ -1733,25 +1843,56 @@ function CotejoCierreWidget({ data, streamId, yaConfirmado }: { data: { candidat
         </div>
       )}
       <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">Previo · no se ha actualizado nada</span>
+        <span className="text-[10px] text-gray-600">
+          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha actualizado nada'}
+        </span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+            Ninguna es
+          </button>
+        )}
         <button onClick={confirmar} disabled={!sel || (!entregado && !facturado) || estado !== 'idle'}
-          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-          {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar'}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar'}
         </button>
       </div>
     </div>
   );
 }
 
-function SOCerradaEtapa4Widget({ data }: { data: { ok?: boolean; error?: string; so_stage?: string; so_url?: string } }) {
+function SOCerradaEtapa4Widget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; so_id?: string; so_stage?: string; so_url?: string; estado_anterior?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Deshaciendo el cierre de la venta…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer cierre de venta', procesado: false,
+      metadata: { cierre_action: 'deshacer', so_id: data.so_id, estado_anterior: data.estado_anterior || '' },
+    });
+  }
   return (
     <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
         <span className="text-[13px] font-semibold text-white">{data.ok ? `Sales Order → ${data.so_stage}` : 'No se pudo actualizar'}</span>
         {data.so_url && <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        {data.ok && (deshecho
+          ? <span className="text-[11px] text-gray-500">Deshecho</span>
+          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
       </div>
       {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+    </div>
+  );
+}
+
+function AccionDeshechaWidget({ data }: { data: { ok?: boolean; error?: string; que?: string } }) {
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 flex items-center gap-2">
+      <span>{data.ok ? '↩️' : '⚠️'}</span>
+      <span className="text-[12px] text-gray-300">
+        {data.ok ? `Deshecho: ${data.que || 'la acción anterior'}` : (data.error || 'No se pudo deshacer')}
+      </span>
     </div>
   );
 }
@@ -1855,13 +1996,14 @@ function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdP
 interface MessageBubbleProps {
   message: Message;
   onSendMessage?: (text: string) => void;
+  onProcesando?: (text: string) => void;
   yaConfirmadoSO?: boolean;
   yaConfirmadoPO?: boolean;
   yaConfirmadoPago?: boolean;
   yaConfirmadoRecepcion?: boolean;
   yaConfirmadoCierre?: boolean;
 }
-function MessageBubble({ message, onSendMessage, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre }: MessageBubbleProps) {
+function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -1919,6 +2061,8 @@ function MessageBubble({ message, onSendMessage, yaConfirmadoSO, yaConfirmadoPO,
   const cotejoCierreData = (cotejoCierreRes?.json || null) as { candidatos?: SOCandidata[] } | null;
   const soCerradaEtapa4Res = extractMarkerJson(rawText, '[SO_CERRADA_ETAPA4]');
   const soCerradaEtapa4Data = (soCerradaEtapa4Res?.json || null) as { ok?: boolean; error?: string; so_stage?: string; so_url?: string } | null;
+  const accionDeshechaRes = extractMarkerJson(rawText, '[ACCION_DESHECHA]');
+  const accionDeshechaData = (accionDeshechaRes?.json || null) as { ok?: boolean; error?: string; que?: string } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -1938,6 +2082,7 @@ function MessageBubble({ message, onSendMessage, yaConfirmadoSO, yaConfirmadoPO,
   if (poRecibidoRes) displayText = displayText.replace(poRecibidoRes.raw, '').trimEnd();
   if (cotejoCierreRes) displayText = displayText.replace(cotejoCierreRes.raw, '').trimEnd();
   if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
+  if (accionDeshechaRes) displayText = displayText.replace(accionDeshechaRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1948,16 +2093,17 @@ function MessageBubble({ message, onSendMessage, yaConfirmadoSO, yaConfirmadoPO,
     <div className="flex items-start gap-2.5">
       <img src="/genie.png" alt="MyGenie" className="flex-shrink-0 w-8 h-8 rounded-full object-contain bg-brain-accent-soft p-0.5 -ml-10" />
       <div className="flex-1 min-w-0 max-w-[92%] space-y-2">
-        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} yaConfirmado={yaConfirmadoSO} />}
+        {cotejoPOData && <CotejoPOWidget data={cotejoPOData} streamId={message.stream_id} yaConfirmado={yaConfirmadoSO} onProcesando={onProcesando} />}
         {soCreadaData && <SOCreadaWidget data={soCreadaData} />}
-        {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPO} />}
-        {poCreadoData && <POCreadoWidget data={poCreadoData} />}
-        {cotejoPagoData && <CotejoPagoWidget data={cotejoPagoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPago} />}
-        {pagoRegistradoData && <PagoRegistradoWidget data={pagoRegistradoData} />}
-        {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoRecepcion} />}
-        {poRecibidoData && <PORecibidoWidget data={poRecibidoData} />}
-        {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} />}
-        {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} />}
+        {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPO} onProcesando={onProcesando} />}
+        {poCreadoData && <POCreadoWidget data={poCreadoData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {cotejoPagoData && <CotejoPagoWidget data={cotejoPagoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoPago} onProcesando={onProcesando} />}
+        {pagoRegistradoData && <PagoRegistradoWidget data={pagoRegistradoData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoRecepcion} onProcesando={onProcesando} />}
+        {poRecibidoData && <PORecibidoWidget data={poRecibidoData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} onProcesando={onProcesando} />}
+        {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {accionDeshechaData && <AccionDeshechaWidget data={accionDeshechaData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}

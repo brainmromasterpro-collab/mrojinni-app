@@ -921,6 +921,18 @@ function AppContent() {
     if (error) console.error('[chat] mensajes insert failed:', error);
   }, [activeStreamId]);
 
+  // Burbuja "procesando" para acciones que NO pasan por handleSendMessage (botones de los
+  // widgets de previo/confirmación — compras, pagos, recepción, cierre). Sin esto el usuario
+  // aprieta un botón y no ve nada moverse hasta que llega la respuesta final.
+  const pushProcesando = useCallback((text: string) => {
+    if (!activeStreamId) return;
+    setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+      id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+      contenido: { text, status: 'querying', procesando: true },
+      created_at: new Date().toISOString(),
+    }]);
+  }, [activeStreamId]);
+
   const handleParseConfirm = useCallback(async (messageId: string, confirmed: boolean, data: { marca: string; modelo: string; qty: number; urgente: boolean; imageUrl?: string }) => {
     setMessages((prev) => prev.map((msg) =>
       msg.id === messageId ? { ...msg, contenido: { ...msg.contenido, resolved: true, confirmed } } : msg
@@ -1916,6 +1928,7 @@ function AppContent() {
             onActiveBulkIdChange={handleActiveBulkIdChange}
             onSendMessage={handleSendMessage}
             onFileUploaded={handleFileUploaded}
+            onProcesando={pushProcesando}
             onDecision={handleDecision}
             onImagenDecision={handleImagenDecision}
             onImagenRetry={handleImagenRetry}
