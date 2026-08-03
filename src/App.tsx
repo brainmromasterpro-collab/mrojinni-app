@@ -1141,6 +1141,25 @@ function AppContent() {
     // Order (leer + cotejar contra las cotizaciones del cliente). El backend lo detecta por metadata.
     const isPO = /\.(pdf|docx?|xlsx?)$/i.test(file.name) || /pdf|word|spreadsheet|excel/i.test(file.type);
     const streamTipo = activeStream?.tipo;
+
+    // COMPRAS (stream 'compras'): una imagen o PDF aquí puede ser comprobante de pago, foto de
+    // recepción o factura firmada — el router determinista del backend decide cuál según el
+    // texto que lo acompaña (mismo metadata.file_url que usa 'ordenes').
+    if (streamTipo === 'compras' && (isImage || /\.pdf$/i.test(file.name) || file.type === 'application/pdf') && !file.url.startsWith('blob:')) {
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: `🔎 Leyendo «${file.name}»…`, status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || `Archivo subido: ${file.name}`,
+        procesado: false,
+        metadata: { file_url: file.url, file_name: file.name, file_mime: file.type },
+      });
+      return;
+    }
+
     if (streamTipo === 'ordenes' && isPO && !file.url.startsWith('blob:')) {
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',

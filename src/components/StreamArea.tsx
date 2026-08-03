@@ -1496,6 +1496,242 @@ function POCreadoWidget({ data }: { data: { resultados?: { ok?: boolean; error?:
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// ETAPA 2 — PAGOS: comprobante leído → elegir la Bill correcta → registrar Payment
+// ─────────────────────────────────────────────────────────────
+interface BillCandidata { id: string; nombre: string; amount_due: number; currency_id?: string; proveedor?: string; url?: string }
+interface CotejoPagoData {
+  comprobante?: { monto?: number | null; moneda?: string; fecha?: string; referencia?: string; notas?: string; error?: string };
+  cotejo?: { candidatas?: BillCandidata[]; multiples?: boolean; por_monto?: boolean };
+}
+function CotejoPagoWidget({ data, streamId }: { data: CotejoPagoData; streamId?: string }) {
+  const comp = data.comprobante || {};
+  const cands = data.cotejo?.candidatas || [];
+  const [sel, setSel] = useState<string>(cands.length === 1 ? cands[0].id : '');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const money = (n?: number | null) => (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+
+  async function confirmar() {
+    if (!sel || !streamId) return;
+    setEstado('creando');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Registrar pago', procesado: false,
+      metadata: { pago_action: 'confirmar', bill_id: sel, monto: comp.monto, datos_comprobante: comp },
+    });
+    setEstado('listo');
+  }
+
+  if (comp.error) {
+    return <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[12px] text-red-300">{comp.error}</div>;
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">🧾</span>
+        <span className="text-[12px] font-semibold text-white">Comprobante de pago</span>
+        <span className="ml-auto text-[12px] text-gray-300">{money(comp.monto)} {comp.moneda}</span>
+      </div>
+      {(comp.fecha || comp.referencia) && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[11px] text-gray-500">
+          {comp.fecha && <span>{comp.fecha}</span>}{comp.fecha && comp.referencia && ' · '}{comp.referencia}
+        </div>
+      )}
+      <div className="px-4 py-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿A cuál cuenta por pagar corresponde?</p>
+        {cands.length === 0 && <p className="text-[12px] text-gray-500">No hay cuentas por pagar abiertas.</p>}
+        {cands.map((b) => (
+          <label key={b.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
+            <input type="radio" name={`bill-${streamId}`} checked={sel === b.id} onChange={() => setSel(b.id)} className="accent-[#6B58FF]" />
+            <span className="text-gray-200">{b.nombre}</span>
+            <span className="text-gray-500">{b.proveedor}</span>
+            <span className="ml-auto text-gray-400">{money(b.amount_due)} pendiente</span>
+          </label>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha registrado nada</span>
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'creando' ? 'Registrando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar pago'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PagoRegistradoWidget({ data }: { data: { ok?: boolean; error?: string; payment_url?: string; bill_url?: string; monto?: number; aviso?: string } }) {
+  return (
+    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-white">{data.ok ? 'Pago registrado' : 'No se pudo registrar'}</span>
+      </div>
+      <div className="px-4 pb-3 text-[12px] text-gray-300 space-y-1">
+        {data.error && <p className="text-red-400">{data.error}</p>}
+        {data.ok && (
+          <>
+            <div className="flex items-center gap-3">
+              {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Payment →</a>}
+              {data.bill_url && <a href={data.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
+            </div>
+            {data.aviso && <p className="text-[11px] text-amber-300/80">{data.aviso}</p>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// ETAPA 3 — RECEPCIÓN: tracking/foto → elegir el PO → cerrar (shipping_stage=Received)
+// ─────────────────────────────────────────────────────────────
+interface POCandidata { id: string; nombre: string; shipping_stage?: string; proveedor?: string; url?: string; lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[] }
+interface CotejoRecepcionData {
+  tracking_texto?: string;
+  contenido_foto?: { items_detectados?: string[]; notas?: string; error?: string } | null;
+  candidatos?: POCandidata[];
+}
+function CotejoRecepcionWidget({ data, streamId }: { data: CotejoRecepcionData; streamId?: string }) {
+  const candidatos = data.candidatos || [];
+  const [sel, setSel] = useState<string>(candidatos.length === 1 ? candidatos[0].id : '');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+  const foto = data.contenido_foto;
+
+  async function confirmar() {
+    if (!sel || !streamId) return;
+    setEstado('creando');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Confirmar recepción', procesado: false,
+      metadata: { recepcion_action: 'confirmar', po_id: sel, tracking: data.tracking_texto || '' },
+    });
+    setEstado('listo');
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">📦</span>
+        <span className="text-[12px] font-semibold text-white">Recepción de mercancía</span>
+      </div>
+      {data.tracking_texto && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[12px] text-gray-300">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
+      )}
+      {foto && !foto.error && (foto.items_detectados?.length ?? 0) > 0 && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e]">
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Detectado en la foto</p>
+          {foto.items_detectados!.map((it, i) => <p key={i} className="text-[12px] text-gray-300">• {it}</p>)}
+          {foto.notas && <p className="text-[11px] text-amber-300/80 mt-1">{foto.notas}</p>}
+        </div>
+      )}
+      <div className="px-4 py-2.5 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál compra es esta?</p>
+        {candidatos.map((po) => (
+          <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
+            <input type="radio" name={`po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-[#6B58FF] mt-0.5" />
+            <div>
+              <p className="text-gray-200">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
+              <p className="text-gray-500">{(po.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha cerrado nada</span>
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'creando' ? 'Cerrando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirma que coincide y cierra'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PORecibidoWidget({ data }: { data: { ok?: boolean; error?: string; po_url?: string } }) {
+  return (
+    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-white">{data.ok ? 'Purchase Order recibido' : 'No se pudo cerrar'}</span>
+        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+      </div>
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// ETAPA 4 — CIERRE DE VENTA: elegir la Sales Order → confirmar entrega/factura → so_stage
+// ─────────────────────────────────────────────────────────────
+interface SOCandidata { id: string; nombre: string; so_stage?: string; cliente?: string; url?: string }
+function CotejoCierreWidget({ data, streamId }: { data: { candidatos?: SOCandidata[] }; streamId?: string }) {
+  const candidatos = data.candidatos || [];
+  const [sel, setSel] = useState<string>('');
+  const [entregado, setEntregado] = useState(false);
+  const [facturado, setFacturado] = useState(false);
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>('idle');
+
+  async function confirmar() {
+    if (!sel || !streamId || (!entregado && !facturado)) return;
+    setEstado('creando');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Actualizar cierre de venta', procesado: false,
+      metadata: { cierre_action: 'confirmar', so_id: sel, entregado, facturado },
+    });
+    setEstado('listo');
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">📄</span>
+        <span className="text-[12px] font-semibold text-white">Cierre de venta</span>
+      </div>
+      <div className="px-4 py-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál Sales Order?</p>
+        {candidatos.map((so) => (
+          <label key={so.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
+            <input type="radio" name={`so-cierre-${streamId}`} checked={sel === so.id} onChange={() => setSel(so.id)} className="accent-[#6B58FF]" />
+            <span className="text-gray-200">{so.nombre}</span>
+            <span className="text-gray-500">{so.cliente}</span>
+            <span className="ml-auto text-[10px] text-gray-600">{so.so_stage}</span>
+          </label>
+        ))}
+      </div>
+      {sel && (
+        <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-4 text-[12px]">
+          <label className="flex items-center gap-1.5 cursor-pointer text-gray-300">
+            <input type="checkbox" checked={entregado} onChange={(e) => setEntregado(e.target.checked)} className="accent-[#6B58FF]" /> Ya se entregó
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer text-gray-300">
+            <input type="checkbox" checked={facturado} onChange={(e) => setFacturado(e.target.checked)} className="accent-[#6B58FF]" /> Factura firmada
+          </label>
+        </div>
+      )}
+      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha actualizado nada</span>
+        <button onClick={confirmar} disabled={!sel || (!entregado && !facturado) || estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SOCerradaEtapa4Widget({ data }: { data: { ok?: boolean; error?: string; so_stage?: string; so_url?: string } }) {
+  return (
+    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-white">{data.ok ? `Sales Order → ${data.so_stage}` : 'No se pudo actualizar'}</span>
+        {data.so_url && <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+      </div>
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+    </div>
+  );
+}
+
 // Widget bulk de productos extraídos de varios links: cada fila tiene su propio botón Publicar
 // (secuencial). Al publicar, se manda un mensaje al chat para que el backend publique ESE producto.
 function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
@@ -1638,6 +1874,18 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   const cotejoProveedorData: CotejoProveedorData | null = cotejoProveedorRes?.json || null;
   const poCreadoRes = extractMarkerJson(rawText, '[PO_CREADO]');
   const poCreadoData = (poCreadoRes?.json || null) as { resultados?: { ok?: boolean; error?: string; po_url?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }[] } | null;
+  const cotejoPagoRes = extractMarkerJson(rawText, '[COTEJO_PAGO]');
+  const cotejoPagoData: CotejoPagoData | null = cotejoPagoRes?.json || null;
+  const pagoRegistradoRes = extractMarkerJson(rawText, '[PAGO_REGISTRADO]');
+  const pagoRegistradoData = (pagoRegistradoRes?.json || null) as { ok?: boolean; error?: string; payment_url?: string; bill_url?: string; monto?: number; aviso?: string } | null;
+  const cotejoRecepcionRes = extractMarkerJson(rawText, '[COTEJO_RECEPCION]');
+  const cotejoRecepcionData: CotejoRecepcionData | null = cotejoRecepcionRes?.json || null;
+  const poRecibidoRes = extractMarkerJson(rawText, '[PO_RECIBIDO]');
+  const poRecibidoData = (poRecibidoRes?.json || null) as { ok?: boolean; error?: string; po_url?: string } | null;
+  const cotejoCierreRes = extractMarkerJson(rawText, '[COTEJO_CIERRE]');
+  const cotejoCierreData = (cotejoCierreRes?.json || null) as { candidatos?: SOCandidata[] } | null;
+  const soCerradaEtapa4Res = extractMarkerJson(rawText, '[SO_CERRADA_ETAPA4]');
+  const soCerradaEtapa4Data = (soCerradaEtapa4Res?.json || null) as { ok?: boolean; error?: string; so_stage?: string; so_url?: string } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -1651,6 +1899,12 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
   if (soCreadaRes) displayText = displayText.replace(soCreadaRes.raw, '').trimEnd();
   if (cotejoProveedorRes) displayText = displayText.replace(cotejoProveedorRes.raw, '').trimEnd();
   if (poCreadoRes) displayText = displayText.replace(poCreadoRes.raw, '').trimEnd();
+  if (cotejoPagoRes) displayText = displayText.replace(cotejoPagoRes.raw, '').trimEnd();
+  if (pagoRegistradoRes) displayText = displayText.replace(pagoRegistradoRes.raw, '').trimEnd();
+  if (cotejoRecepcionRes) displayText = displayText.replace(cotejoRecepcionRes.raw, '').trimEnd();
+  if (poRecibidoRes) displayText = displayText.replace(poRecibidoRes.raw, '').trimEnd();
+  if (cotejoCierreRes) displayText = displayText.replace(cotejoCierreRes.raw, '').trimEnd();
+  if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -1665,6 +1919,12 @@ function MessageBubble({ message, onSendMessage }: { message: Message; onSendMes
         {soCreadaData && <SOCreadaWidget data={soCreadaData} />}
         {cotejoProveedorData && <CotejoProveedorWidget data={cotejoProveedorData} streamId={message.stream_id} />}
         {poCreadoData && <POCreadoWidget data={poCreadoData} />}
+        {cotejoPagoData && <CotejoPagoWidget data={cotejoPagoData} streamId={message.stream_id} />}
+        {pagoRegistradoData && <PagoRegistradoWidget data={pagoRegistradoData} />}
+        {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} />}
+        {poRecibidoData && <PORecibidoWidget data={poRecibidoData} />}
+        {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} />}
+        {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
