@@ -1683,6 +1683,7 @@ interface CotejoRecepcionData {
   tracking_texto?: string;
   contenido_foto?: { items_detectados?: string[]; notas?: string; error?: string } | null;
   candidatos?: POCandidata[];
+  sin_match?: boolean;
 }
 function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoRecepcionData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const candidatos = data.candidatos || [];
@@ -1729,6 +1730,11 @@ function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: {
       )}
       <div className="px-4 py-2.5 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál compra es esta?</p>
+        {data.sin_match && (
+          <p className="text-[11px] text-amber-300/80">
+            No pude identificar cuál por el contenido — aquí están las más recientes en tránsito.
+          </p>
+        )}
         {candidatos.map((po) => (
           <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
             <input type="radio" name={`po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-[#6B58FF] mt-0.5" />
