@@ -1903,6 +1903,79 @@ function AccionDeshechaWidget({ data }: { data: { ok?: boolean; error?: string; 
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// ESTADO OPERATIVO — rollup Vendido→Comprado→Pagado→Recibido→Facturado por Sales Order
+// ─────────────────────────────────────────────────────────────
+interface VentaEstado {
+  so_id: string; so_nombre?: string; so_numero?: string | number; so_stage?: string;
+  cliente?: string; so_url?: string;
+  comprado?: { total: number; hecho: number; pos?: { id: string; nombre?: string; url?: string }[] };
+  pagado?: { total: number; hecho: number };
+  recibido?: { total: number; hecho: number };
+  facturado?: boolean;
+}
+function EtapaPill({ label, hecho, total, siempre }: { label: string; hecho: number; total?: number; siempre?: boolean }) {
+  const completo = siempre || (total !== undefined && total > 0 && hecho >= total);
+  const pendiente = !siempre && (!total || total === 0);
+  const color = completo ? 'bg-[#39FF14]/15 text-[#39FF14]' : pendiente ? 'bg-gray-600/20 text-gray-500' : 'bg-amber-400/15 text-amber-300';
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${color}`}>
+        {label}{!siempre && total ? ` ${hecho}/${total}` : ''}
+      </span>
+    </div>
+  );
+}
+function VentaEstadoRow({ v }: { v: VentaEstado }) {
+  const comprado = v.comprado || { total: 0, hecho: 0 };
+  const pagado = v.pagado || { total: 0, hecho: 0 };
+  const recibido = v.recibido || { total: 0, hecho: 0 };
+  return (
+    <div className="px-4 py-2.5 border-b border-[#2c2c2e]/60 last:border-0">
+      <div className="flex items-center gap-2 text-[12px] mb-1.5">
+        <a href={v.so_url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">
+          {v.so_nombre} {v.so_numero !== undefined && `· #${v.so_numero}`}
+        </a>
+        {v.cliente && <span className="text-gray-500 flex-shrink-0">{v.cliente}</span>}
+      </div>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <EtapaPill label="Vendido ✓" hecho={1} siempre />
+        <span className="text-gray-700">→</span>
+        <EtapaPill label="Comprado" hecho={comprado.hecho} total={comprado.total} />
+        <span className="text-gray-700">→</span>
+        <EtapaPill label="Pagado" hecho={pagado.hecho} total={pagado.total} />
+        <span className="text-gray-700">→</span>
+        <EtapaPill label="Recibido" hecho={recibido.hecho} total={recibido.total} />
+        <span className="text-gray-700">→</span>
+        <EtapaPill label="Facturado" hecho={v.facturado ? 1 : 0} total={1} />
+      </div>
+      {comprado.pos && comprado.pos.length > 0 && (
+        <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+          {comprado.pos.map((po) => (
+            <a key={po.id} href={po.url} target="_blank" rel="noreferrer" className="text-[10px] text-gray-500 hover:text-[#6B58FF] truncate">
+              {po.nombre} →
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+function EstadoOperativoWidget({ data }: { data: { ventas?: VentaEstado[] } }) {
+  const ventas = data.ventas || [];
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">📊</span>
+        <span className="text-[12px] font-semibold text-white">Estado operativo</span>
+      </div>
+      {ventas.length === 0
+        ? <p className="px-4 py-3 text-[12px] text-gray-500">Sin ventas para mostrar.</p>
+        : ventas.map((v) => <VentaEstadoRow key={v.so_id} v={v} />)}
+    </div>
+  );
+}
+
 // Widget bulk de productos extraídos de varios links: cada fila tiene su propio botón Publicar
 // (secuencial). Al publicar, se manda un mensaje al chat para que el backend publique ESE producto.
 function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdPreviewItem[]; onSendMessage?: (text: string) => void }) {
@@ -2069,6 +2142,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const soCerradaEtapa4Data = (soCerradaEtapa4Res?.json || null) as { ok?: boolean; error?: string; so_stage?: string; so_url?: string } | null;
   const accionDeshechaRes = extractMarkerJson(rawText, '[ACCION_DESHECHA]');
   const accionDeshechaData = (accionDeshechaRes?.json || null) as { ok?: boolean; error?: string; que?: string } | null;
+  const estadoOperativoRes = extractMarkerJson(rawText, '[ESTADO_OPERATIVO]');
+  const estadoOperativoData = (estadoOperativoRes?.json || null) as { ventas?: VentaEstado[] } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -2089,6 +2164,7 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (cotejoCierreRes) displayText = displayText.replace(cotejoCierreRes.raw, '').trimEnd();
   if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
   if (accionDeshechaRes) displayText = displayText.replace(accionDeshechaRes.raw, '').trimEnd();
+  if (estadoOperativoRes) displayText = displayText.replace(estadoOperativoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -2110,6 +2186,7 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} onProcesando={onProcesando} />}
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
         {accionDeshechaData && <AccionDeshechaWidget data={accionDeshechaData} />}
+        {estadoOperativoData && <EstadoOperativoWidget data={estadoOperativoData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
