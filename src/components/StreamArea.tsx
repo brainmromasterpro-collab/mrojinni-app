@@ -1146,7 +1146,7 @@ interface CotejoProveedorLink {
 }
 interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
-  cliente?: string; currency_id?: string; terminos_pago?: string;
+  cliente?: string; currency_id?: string; terminos_pago?: string; sin_terminos_pago?: boolean;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
   lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
@@ -1390,7 +1390,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
   const grupos = c.grupos || [];
   const sinMatch = c.sin_match || [];
   const [incluidos, setIncluidos] = useState<Set<string>>(
-    () => new Set(grupos.filter((g) => !g.ya_comprado).map((g) => g.so_id)));
+    () => new Set(grupos.filter((g) => !g.ya_comprado && !g.sin_terminos_pago).map((g) => g.so_id)));
   // yaConfirmado = ¿ya hay un [PO_CREADO] más adelante en el historial? Evita reactivar el botón
   // al refrescar la página y crear el PO/Bill dos veces.
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
@@ -1441,10 +1441,10 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
 
       {grupos.map((g) => (
         <div key={g.so_id} className="px-4 py-2.5 border-b border-[#2c2c2e]/60">
-          <label className="flex items-start gap-2 cursor-pointer">
-            <input type="checkbox" checked={incluidos.has(g.so_id)}
+          <label className={`flex items-start gap-2 ${g.sin_terminos_pago ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+            <input type="checkbox" checked={incluidos.has(g.so_id)} disabled={g.sin_terminos_pago}
               onChange={(e) => setIncluidos((prev) => { const n = new Set(prev); if (e.target.checked) n.add(g.so_id); else n.delete(g.so_id); return n; })}
-              className="accent-[#6B58FF] mt-0.5" />
+              className="accent-[#6B58FF] mt-0.5 disabled:opacity-40" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[12px]">
                 <a href={g.so_url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">
@@ -1462,6 +1462,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                 Proveedor <span className="text-gray-300">{g.proveedor_nombre || '—'}</span>
                 {g.terminos_pago && <span> · Términos <span className="text-gray-300">{g.terminos_pago}</span></span>}
               </p>
+              {g.sin_terminos_pago && (
+                <p className="text-[11px] text-red-400 mt-0.5">
+                  ⚠ Este cliente no tiene Condiciones de pago configuradas en 1CRM (campo obligatorio) —
+                  configúralas en su cuenta antes de poder crear esta orden de compra.
+                </p>
+              )}
               <div className="mt-1 space-y-0.5">
                 {g.links.map((l, i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
