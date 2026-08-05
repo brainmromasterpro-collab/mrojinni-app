@@ -1146,7 +1146,7 @@ interface CotejoProveedorLink {
 }
 interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
-  cliente?: string; currency_id?: string;
+  cliente?: string; currency_id?: string; terminos_pago?: string;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
   lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
@@ -1403,7 +1403,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
     onProcesando?.('🛒 Creando la(s) orden(es) de compra en 1CRM… Te aviso al terminar.');
     const drafts = grupos.filter((g) => incluidos.has(g.so_id)).map((g) => ({
       so_id: g.so_id, proveedor_nombre: g.proveedor_nombre, currency_id: g.currency_id,
-      lineas: g.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
+      terminos_pago: g.terminos_pago, lineas: g.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
     }));
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user',
@@ -1460,6 +1460,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
                 Proveedor <span className="text-gray-300">{g.proveedor_nombre || '—'}</span>
+                {g.terminos_pago && <span> · Términos <span className="text-gray-300">{g.terminos_pago}</span></span>}
               </p>
               <div className="mt-1 space-y-0.5">
                 {g.links.map((l, i) => (
