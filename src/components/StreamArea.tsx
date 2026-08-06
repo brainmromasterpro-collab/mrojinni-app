@@ -1772,7 +1772,23 @@ function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: {
   );
 }
 
-function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; estado_anterior?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+interface AjusteStock { ok?: boolean; part_number?: string; producto?: string; motivo?: string; stock_anterior?: number; stock_nuevo?: number; delta?: number }
+function AjustesStock({ ajustes }: { ajustes?: AjusteStock[] }) {
+  if (!ajustes || ajustes.length === 0) return null;
+  return (
+    <div className="px-4 pb-2.5 space-y-0.5">
+      <p className="text-[10px] uppercase tracking-wider text-gray-600">Stock</p>
+      {ajustes.map((a, i) => (
+        <p key={i} className="text-[11px] text-gray-400">
+          {a.ok
+            ? <>{a.producto || a.part_number}: <span className="text-gray-300">{a.stock_anterior} → {a.stock_nuevo}</span> ({a.delta && a.delta > 0 ? '+' : ''}{a.delta})</>
+            : <span className="text-amber-300/80">{a.part_number}: {a.motivo || 'no se pudo ajustar'}</span>}
+        </p>
+      ))}
+    </div>
+  );
+}
+function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; estado_anterior?: string; ajustes_stock?: AjusteStock[] }; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
     if (!streamId) return;
@@ -1793,6 +1809,7 @@ function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boole
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
           : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
       </div>
+      <AjustesStock ajustes={data.ajustes_stock} />
       {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
     </div>
   );
@@ -1875,7 +1892,7 @@ function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { da
   );
 }
 
-function SOCerradaEtapa4Widget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; so_id?: string; so_stage?: string; so_url?: string; estado_anterior?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+function SOCerradaEtapa4Widget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; so_id?: string; so_stage?: string; so_url?: string; estado_anterior?: string; ajustes_stock?: AjusteStock[] }; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
     if (!streamId) return;
@@ -1896,6 +1913,7 @@ function SOCerradaEtapa4Widget({ data, streamId, onProcesando }: { data: { ok?: 
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
           : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
       </div>
+      <AjustesStock ajustes={data.ajustes_stock} />
       {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
     </div>
   );
