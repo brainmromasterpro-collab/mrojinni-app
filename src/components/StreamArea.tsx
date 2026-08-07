@@ -613,7 +613,9 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
               yaConfirmadoPO={laterHasMarker('[PO_CREADO]')}
               yaConfirmadoPago={laterHasMarker('[PAGO_REGISTRADO]')}
               yaConfirmadoRecepcion={laterHasMarker('[PO_RECIBIDO]')}
-              yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')} />;
+              yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')}
+              yaConfirmadoReceivingCotejo={laterHasMarker('[RECEIVING_PENDIENTE]')}
+              yaConfirmadoReceivingPendiente={laterHasMarker('[RECEIVING_CONFIRMADO]')} />;
           })}
 
         </div>
@@ -1687,7 +1689,7 @@ function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: b
 // ─────────────────────────────────────────────────────────────
 // ETAPA 3 — RECEPCIÓN: tracking/foto → elegir el PO → cerrar (shipping_stage=Received)
 // ─────────────────────────────────────────────────────────────
-interface POCandidata { id: string; nombre: string; shipping_stage?: string; proveedor?: string; url?: string; lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[] }
+interface POCandidata { id: string; nombre: string; shipping_stage?: string; proveedor?: string; url?: string; lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[]; so_id?: string; so_nombre?: string; so_cliente?: string; so_url?: string }
 interface CotejoRecepcionData {
   tracking_texto?: string;
   contenido_foto?: { items_detectados?: string[]; notas?: string; error?: string } | null;
@@ -1804,6 +1806,210 @@ function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boole
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
         <span className="text-[13px] font-semibold text-white">{data.ok ? 'Purchase Order recibido' : 'No se pudo cerrar'}</span>
+        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        {data.ok && (deshecho
+          ? <span className="text-[11px] text-gray-500">Deshecho</span>
+          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
+      </div>
+      <AjustesStock ajustes={data.ajustes_stock} />
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// RECEIVING (nuevo) — evidencia (link/foto/tracking o packing list) -> elegir a cuál PO
+// corresponde (mostrando también la Sales Order/cliente detrás) -> crear como PENDIENTE (sin
+// tocar 1CRM) -> confirmar cantidades de ESTA entrega (puede haber varias por PO) -> suma al
+// stock. Reemplaza el flujo de un solo paso de CotejoRecepcionWidget/PORecibidoWidget de arriba
+// (esos quedan para renderizar mensajes históricos ya guardados con esos marcadores).
+// ─────────────────────────────────────────────────────────────
+interface ReceivingCotejoData {
+  tracking_texto?: string;
+  packing_list?: { es_packing_list?: boolean; items?: { nombre?: string; mfr_part_no?: string; cantidad?: number }[]; notas?: string; error?: string } | null;
+  candidatos?: POCandidata[];
+  sin_match?: boolean;
+}
+function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ReceivingCotejoData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const candidatos = data.candidatos || [];
+  const [sel, setSel] = useState<string>(candidatos.length === 1 ? candidatos[0].id : '');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
+  const pl = data.packing_list;
+
+  async function confirmar() {
+    if (!sel || !streamId) return;
+    setEstado('creando');
+    onProcesando?.('📦 Registrando la recepción como pendiente…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Crear recepción pendiente', procesado: false,
+      metadata: { receiving_action: 'crear_pendiente', po_id: sel, tracking: data.tracking_texto || '', packing_list: pl || null },
+    });
+    setEstado('listo');
+  }
+
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
+      metadata: { cancelar_accion: true },
+    });
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">📦</span>
+        <span className="text-[12px] font-semibold text-white">Evidencia de recepción</span>
+      </div>
+      {data.tracking_texto && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[12px] text-gray-300">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
+      )}
+      {pl && !pl.error && pl.es_packing_list && (pl.items?.length ?? 0) > 0 && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e]">
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Packing list detectado</p>
+          {pl.items!.map((it, i) => (
+            <p key={i} className="text-[12px] text-gray-300">
+              • {it.cantidad}× {it.nombre} {it.mfr_part_no ? <span className="text-gray-500 font-mono">({it.mfr_part_no})</span> : null}
+            </p>
+          ))}
+          {pl.notas && <p className="text-[11px] text-amber-300/80 mt-1">{pl.notas}</p>}
+        </div>
+      )}
+      {pl && !pl.error && !pl.es_packing_list && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e]">
+          <p className="text-[11px] text-amber-300/80">
+            No parece un packing list con cantidades legibles{pl.notas ? ` — ${pl.notas}` : ''}. Igual se puede crear la recepción como pendiente.
+          </p>
+        </div>
+      )}
+      <div className="px-4 py-2.5 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿A cuál compra corresponde?</p>
+        {data.sin_match && (
+          <p className="text-[11px] text-amber-300/80">
+            No pude identificar cuál por el contenido — aquí están las más recientes en tránsito.
+          </p>
+        )}
+        {candidatos.map((po) => (
+          <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
+            <input type="radio" name={`recv-po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-[#6B58FF] mt-0.5" />
+            <div>
+              <p className="text-gray-200">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
+              {po.so_nombre && (
+                <p className="text-gray-500">Venta: <span className="text-gray-300">{po.so_nombre}</span>{po.so_cliente ? ` · ${po.so_cliente}` : ''}</p>
+              )}
+              <p className="text-gray-500">{(po.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">
+          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada'}
+        </span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+            Ninguna coincide
+          </button>
+        )}
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Es esta — crear pendiente'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ReceivingLinea { name?: string; mfr_part_no?: string; cantidad_esperada?: number; cantidad_recibida_previo?: number; cantidad_restante?: number; cantidad_sugerida?: number }
+interface ReceivingPendienteData { po_id?: string; tracking?: string; lineas?: ReceivingLinea[]; estado_anterior?: string; packing_list_notas?: string }
+function ReceivingPendienteWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ReceivingPendienteData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const lineas = data.lineas || [];
+  const [cantidades, setCantidades] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    lineas.forEach((l) => { if (l.mfr_part_no) init[l.mfr_part_no] = String(l.cantidad_sugerida ?? l.cantidad_restante ?? 0); });
+    return init;
+  });
+  const [estado, setEstado] = useState<'idle' | 'confirmando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+
+  async function confirmar() {
+    if (!streamId || !data.po_id) return;
+    const cant: Record<string, number> = {};
+    lineas.forEach((l) => {
+      if (!l.mfr_part_no) return;
+      const v = parseFloat(cantidades[l.mfr_part_no] || '0');
+      if (v > 0) cant[l.mfr_part_no] = v;
+    });
+    setEstado('confirmando');
+    onProcesando?.('📦 Confirmando la recepción y sumando al stock…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Confirmar cantidades recibidas', procesado: false,
+      metadata: { receiving_action: 'confirmar_final', po_id: data.po_id, cantidades: cant, estado_anterior: data.estado_anterior || '' },
+    });
+    setEstado('listo');
+  }
+
+  return (
+    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[13px]">⏳</span>
+        <span className="text-[12px] font-semibold text-white">Recepción pendiente</span>
+        {data.tracking && <span className="ml-auto text-[11px] text-gray-500 font-mono">{data.tracking}</span>}
+      </div>
+      {data.packing_list_notas && (
+        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[11px] text-amber-300/80">{data.packing_list_notas}</div>
+      )}
+      <div className="px-4 py-2.5 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">Cantidades de esta entrega</p>
+        {lineas.map((l, i) => (
+          <div key={i} className="flex items-center gap-2 text-[12px]">
+            <div className="flex-1 min-w-0">
+              <p className="text-gray-200 truncate">{l.name}</p>
+              <p className="text-gray-500">
+                {l.mfr_part_no && <span className="font-mono">{l.mfr_part_no}</span>}
+                {' · restante '}{l.cantidad_restante ?? 0} de {l.cantidad_esperada ?? 0}
+                {(l.cantidad_recibida_previo ?? 0) > 0 && ` (ya recibido ${l.cantidad_recibida_previo})`}
+              </p>
+            </div>
+            <input
+              type="number" min={0} disabled={estado !== 'idle'}
+              value={cantidades[l.mfr_part_no || ''] ?? ''}
+              onChange={(e) => setCantidades((c) => ({ ...c, [l.mfr_part_no || '']: e.target.value }))}
+              className="w-20 bg-[#0f0f10] border border-[#2c2c2e] rounded-md px-2 py-1 text-[12px] text-white text-right disabled:opacity-50"
+            />
+          </div>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Pendiente · confirma ahora o cuando tengas el resto</span>
+        <button onClick={confirmar} disabled={estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'confirmando' ? 'Confirmando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar recepción'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number> }; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Deshaciendo esta recepción…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer recepción', procesado: false,
+      metadata: { receiving_action: 'deshacer', po_id: data.po_id, cantidades: data.cantidades || {}, estado_anterior: data.estado_anterior || '' },
+    });
+  }
+  return (
+    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-white">
+          {data.ok ? (data.completo ? 'Purchase Order recibido completo' : 'Recepción parcial confirmada') : 'No se pudo confirmar'}
+        </span>
+        {data.ok && !data.completo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300/90">Parcial</span>}
         {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
         {data.ok && (deshecho
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
@@ -2108,8 +2314,10 @@ interface MessageBubbleProps {
   yaConfirmadoPago?: boolean;
   yaConfirmadoRecepcion?: boolean;
   yaConfirmadoCierre?: boolean;
+  yaConfirmadoReceivingCotejo?: boolean;
+  yaConfirmadoReceivingPendiente?: boolean;
 }
-function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre }: MessageBubbleProps) {
+function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -2171,6 +2379,12 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const accionDeshechaData = (accionDeshechaRes?.json || null) as { ok?: boolean; error?: string; que?: string } | null;
   const estadoOperativoRes = extractMarkerJson(rawText, '[ESTADO_OPERATIVO]');
   const estadoOperativoData = (estadoOperativoRes?.json || null) as { ventas?: VentaEstado[] } | null;
+  const receivingCotejoRes = extractMarkerJson(rawText, '[RECEIVING_COTEJO]');
+  const receivingCotejoData: ReceivingCotejoData | null = receivingCotejoRes?.json || null;
+  const receivingPendienteRes = extractMarkerJson(rawText, '[RECEIVING_PENDIENTE]');
+  const receivingPendienteData: ReceivingPendienteData | null = receivingPendienteRes?.json || null;
+  const receivingConfirmadoRes = extractMarkerJson(rawText, '[RECEIVING_CONFIRMADO]');
+  const receivingConfirmadoData = (receivingConfirmadoRes?.json || null) as { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number> } | null;
   let displayText = rawText
     .replace(/\[DECISION:\s*.+?\]/s, '')
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
@@ -2192,6 +2406,9 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
   if (accionDeshechaRes) displayText = displayText.replace(accionDeshechaRes.raw, '').trimEnd();
   if (estadoOperativoRes) displayText = displayText.replace(estadoOperativoRes.raw, '').trimEnd();
+  if (receivingCotejoRes) displayText = displayText.replace(receivingCotejoRes.raw, '').trimEnd();
+  if (receivingPendienteRes) displayText = displayText.replace(receivingPendienteRes.raw, '').trimEnd();
+  if (receivingConfirmadoRes) displayText = displayText.replace(receivingConfirmadoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -2212,6 +2429,9 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {poRecibidoData && <PORecibidoWidget data={poRecibidoData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} onProcesando={onProcesando} />}
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {receivingCotejoData && <ReceivingCotejoWidget data={receivingCotejoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingCotejo} onProcesando={onProcesando} />}
+        {receivingPendienteData && <ReceivingPendienteWidget data={receivingPendienteData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingPendiente} onProcesando={onProcesando} />}
+        {receivingConfirmadoData && <ReceivingConfirmadoWidget data={receivingConfirmadoData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {accionDeshechaData && <AccionDeshechaWidget data={accionDeshechaData} />}
         {estadoOperativoData && <EstadoOperativoWidget data={estadoOperativoData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
