@@ -1211,34 +1211,34 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
   const money = (n?: number | null) =>
     (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
   const badge = (e: string) =>
-    e === 'ok' ? { t: 'OK', c: 'bg-[#39FF14]/15 text-[#39FF14]' }
-      : e === 'precio_distinto' ? { t: 'Precio ≠', c: 'bg-amber-400/15 text-amber-300' }
-        : { t: 'No está', c: 'bg-red-500/15 text-red-400' };
+    e === 'ok' ? { t: 'OK', c: 'bg-brain-success-bg text-brain-success' }
+      : e === 'precio_distinto' ? { t: 'Precio ≠', c: 'bg-brain-warning-bg text-amber-700' }
+        : { t: 'No está', c: 'bg-brain-error-bg text-brain-error' };
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">🧾</span>
-        <span className="text-[12px] font-semibold text-white">Orden de compra</span>
-        {po.po_number && <span className="text-[11px] font-mono text-gray-400">· {po.po_number}</span>}
+        <span className="text-[12px] font-semibold text-gray-900">Orden de compra</span>
+        {po.po_number && <span className="text-[11px] font-mono text-gray-600">· {po.po_number}</span>}
         {po.formato && <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-600">{po.formato}</span>}
       </div>
 
       {/* Cliente / cuenta */}
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] text-[12px]">
+      <div className="px-4 py-2.5 border-b border-brain-border text-[12px]">
         <span className="text-gray-500">Cliente </span>
-        <span className="text-gray-200">{po.cliente || '—'}</span>
+        <span className="text-gray-900">{po.cliente || '—'}</span>
         {c.cuenta ? (
-          <a href={c.cuenta.url} target="_blank" rel="noreferrer" className="ml-2 text-[#6B58FF] hover:underline">✓ cuenta en CRM</a>
+          <a href={c.cuenta.url} target="_blank" rel="noreferrer" className="ml-2 text-brain-accent hover:underline">✓ cuenta en CRM</a>
         ) : (
-          <span className="ml-2 text-red-400">⚠ sin cuenta en CRM</span>
+          <span className="ml-2 text-brain-error">⚠ sin cuenta en CRM</span>
         )}
       </div>
 
       {/* Avisos duros (p.ej. cuenta no encontrada) */}
       {(c.avisos || []).length > 0 && (
-        <div className="px-4 py-2.5 border-b border-[#2c2c2e] bg-red-500/5">
-          {(c.avisos || []).map((a, i) => <p key={i} className="text-[12px] text-red-300">{a}</p>)}
+        <div className="px-4 py-2.5 border-b border-brain-border bg-brain-error-bg">
+          {(c.avisos || []).map((a, i) => <p key={i} className="text-[12px] text-brain-error">{a}</p>)}
         </div>
       )}
 
@@ -1257,17 +1257,17 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
             </thead>
             <tbody>
               {items.map((it, i) => {
-                const b = it.match_parcial ? { t: '≈ Verificar', c: 'bg-amber-400/15 text-amber-300' } : badge(it.estado);
+                const b = it.match_parcial ? { t: '≈ Verificar', c: 'bg-brain-warning-bg text-amber-700' } : badge(it.estado);
                 const distinta = it.part_number_cotizacion && it.part_number_cotizacion !== it.part_number;
                 return (
-                  <tr key={i} className="border-t border-[#2c2c2e]/60">
-                    <td className="px-2 py-1.5 font-mono text-gray-200">
+                  <tr key={i} className="border-t border-brain-border">
+                    <td className="px-2 py-1.5 font-mono text-gray-900">
                       {it.part_number}
-                      {distinta && <span className="block text-[10px] text-amber-400/70">cotiz.: {it.part_number_cotizacion}</span>}
+                      {distinta && <span className="block text-[10px] text-amber-600">cotiz.: {it.part_number_cotizacion}</span>}
                     </td>
-                    <td className="px-2 py-1.5 text-right text-gray-300">{it.cantidad_po ?? '—'}</td>
-                    <td className="px-2 py-1.5 text-right text-gray-300">{money(it.precio_po)}</td>
-                    <td className={`px-2 py-1.5 text-right ${it.estado === 'precio_distinto' ? 'text-amber-300' : 'text-gray-300'}`}>{money(it.precio_cotizacion)}</td>
+                    <td className="px-2 py-1.5 text-right text-gray-700">{it.cantidad_po ?? '—'}</td>
+                    <td className="px-2 py-1.5 text-right text-gray-700">{money(it.precio_po)}</td>
+                    <td className={`px-2 py-1.5 text-right ${it.estado === 'precio_distinto' ? 'text-amber-700' : 'text-gray-700'}`}>{money(it.precio_cotizacion)}</td>
                     <td className="px-2 py-1.5"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${b.c}`}>{b.t}</span></td>
                   </tr>
                 );
@@ -1279,16 +1279,16 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
 
       {/* Cotizaciones candidatas */}
       {cands.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-[#2c2c2e]">
+        <div className="px-4 py-2.5 border-t border-brain-border">
           <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">Cotización de referencia (candidatas)</p>
           <div className="space-y-1">
             {cands.map((q) => (
               <div key={q.id} className="flex items-center gap-2 text-[12px]">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-[#39FF14]' : 'bg-red-500'}`} />
-                <a href={q.url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">{q.nombre}</a>
-                {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-[#6B58FF]/20 text-[#6B58FF]">★ citada en el PO</span>}
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-brain-success' : 'bg-brain-error'}`} />
+                <a href={q.url} target="_blank" rel="noreferrer" className="text-gray-900 hover:text-brain-accent truncate">{q.nombre}</a>
+                {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-accent/15 text-brain-accent">★ citada en el PO</span>}
                 <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
-                <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-red-400'}`}>
+                <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-brain-error'}`}>
                   {q.vigente ? (q.valid_until ? `vigente ${q.valid_until}` : 'vigente') : (q.motivo || 'no vigente')}
                 </span>
               </div>
@@ -1299,26 +1299,26 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
 
       {/* Discrepancias */}
       {disc.length > 0 && (
-        <div className="px-4 py-2.5 border-t border-[#2c2c2e] bg-amber-400/5">
-          <p className="text-[10px] uppercase tracking-wider text-amber-500/80 mb-1">Revisar antes de continuar</p>
-          {disc.map((d, i) => <p key={i} className="text-[12px] text-amber-200/90 leading-snug">• {d}</p>)}
+        <div className="px-4 py-2.5 border-t border-brain-border bg-brain-warning-bg">
+          <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">Revisar antes de continuar</p>
+          {disc.map((d, i) => <p key={i} className="text-[12px] text-amber-700 leading-snug">• {d}</p>)}
         </div>
       )}
 
       {/* Generar Sales Order (Fase 2) — botón + previo interactivo */}
       {draft ? (
-        <div className="border-t border-[#2c2c2e]">
+        <div className="border-t border-brain-border">
           {!showPrev ? (
             <div className="px-4 py-2.5 flex items-center gap-2">
-              <span className="text-[12px] text-gray-400">{c.resumen}</span>
+              <span className="text-[12px] text-gray-600">{c.resumen}</span>
               <button onClick={() => setShowPrev(true)}
-                className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#6B58FF] text-white hover:bg-[#5a49e0] transition-colors">
+                className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white hover:bg-brain-accent-hover transition-colors">
                 Generar Sales Order
               </button>
             </div>
           ) : (
             <div className="px-4 py-3 space-y-3">
-              <p className="text-[11px] uppercase tracking-wider text-[#6B58FF]">Previo de la Sales Order</p>
+              <p className="text-[11px] uppercase tracking-wider text-brain-accent">Previo de la Sales Order</p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                 <Prov label="Cliente" val={draft.cuenta_nombre} src={draft.origen?.cuenta} />
                 <Prov label="Cotización" val={draft.quote_nombre} src={draft.origen?.cotizacion} />
@@ -1332,24 +1332,24 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                   <label key={l.part_number} className="flex items-center gap-2 text-[12px] cursor-pointer">
                     <input type="checkbox" checked={incluidas.has(l.part_number)}
                       onChange={(e) => setIncluidas((prev) => { const n = new Set(prev); if (e.target.checked) n.add(l.part_number); else n.delete(l.part_number); return n; })}
-                      className="accent-[#6B58FF]" />
-                    <span className="font-mono text-gray-200">{l.part_number}</span>
-                    <span className={`text-[10px] px-1 rounded ${l.pedido ? 'bg-[#39FF14]/15 text-[#39FF14]' : 'bg-gray-600/20 text-gray-500'}`}>
+                      className="accent-brain-accent" />
+                    <span className="font-mono text-gray-900">{l.part_number}</span>
+                    <span className={`text-[10px] px-1 rounded ${l.pedido ? 'bg-brain-success-bg text-brain-success' : 'bg-gray-100 text-gray-500'}`}>
                       {l.pedido ? 'pedido' : 'no pedido'}
                     </span>
-                    <span className="ml-auto text-gray-400">qty {l.cantidad} · ${(l.unit_price ?? 0).toLocaleString('es-MX')}</span>
+                    <span className="ml-auto text-gray-600">qty {l.cantidad} · ${(l.unit_price ?? 0).toLocaleString('es-MX')}</span>
                   </label>
                 ))}
               </div>
               {!draft.puede_crear && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-amber-700">
                   ⚠ No se puede crear aún: {draft.quote_vigente === false ? 'la cotización de referencia está vencida' : draft.para_nosotros === false ? 'confirma que la orden es para nosotros' : 'revisa las discrepancias'}.
                 </p>
               )}
               <div className="flex items-center gap-2 pt-1">
-                <button onClick={() => setShowPrev(false)} className="text-[12px] text-gray-500 hover:text-gray-300">Cancelar</button>
+                <button onClick={() => setShowPrev(false)} className="text-[12px] text-gray-500 hover:text-gray-700">Cancelar</button>
                 <button onClick={confirmarCrear} disabled={!draft.puede_crear || estado !== 'idle' || incluidas.size === 0}
-                  className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+                  className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
                   {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar y crear en 1CRM'}
                 </button>
               </div>
@@ -1357,8 +1357,8 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
           )}
         </div>
       ) : (
-        <div className="px-4 py-2 border-t border-[#2c2c2e] flex items-center gap-2">
-          <span className={`text-[12px] ${c.todo_ok ? 'text-[#39FF14]' : 'text-gray-400'}`}>
+        <div className="px-4 py-2 border-t border-brain-border flex items-center gap-2">
+          <span className={`text-[12px] ${c.todo_ok ? 'text-brain-success' : 'text-gray-600'}`}>
             {c.todo_ok ? '✓ Todo coincide' : (c.resumen || 'Cotejo completado')}
           </span>
           <span className="ml-auto text-[10px] text-gray-600">Previo · no se ha creado nada en el CRM</span>
@@ -1370,16 +1370,16 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
 
 function SOCreadaWidget({ data }: { data: { so_numero?: string | number; nombre?: string; url: string; lineas_finales?: number } }) {
   return (
-    <div className="bg-[#1c1c1e] border border-[#39FF14]/30 rounded-xl overflow-hidden">
+    <div className="bg-white border border-brain-success/30 rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>✅</span>
-        <span className="text-[13px] font-semibold text-white">Sales Order creada</span>
-        {data.so_numero !== undefined && <span className="text-[12px] font-mono text-gray-400">#{data.so_numero}</span>}
+        <span className="text-[13px] font-semibold text-gray-900">Sales Order creada</span>
+        {data.so_numero !== undefined && <span className="text-[12px] font-mono text-gray-600">#{data.so_numero}</span>}
       </div>
-      <div className="px-4 pb-3 text-[12px] text-gray-300 space-y-1">
+      <div className="px-4 pb-3 text-[12px] text-gray-700 space-y-1">
         {data.nombre && <p className="break-words">{data.nombre}</p>}
         <p className="text-gray-500">{data.lineas_finales} línea(s) · cotización marcada Aceptada</p>
-        {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="inline-block text-[#6B58FF] hover:underline">Ver en 1CRM →</a>}
+        {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="inline-block text-brain-accent hover:underline">Ver en 1CRM →</a>}
       </div>
     </div>
   );
@@ -1429,45 +1429,45 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
 
   if (c.error) {
     return (
-      <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[12px] text-red-300">
+      <div className="bg-white border border-brain-border rounded-xl px-4 py-2.5 text-[12px] text-brain-error">
         {c.error}
       </div>
     );
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">🛒</span>
-        <span className="text-[12px] font-semibold text-white">Compra a proveedor</span>
+        <span className="text-[12px] font-semibold text-gray-900">Compra a proveedor</span>
         <span className="ml-auto text-[10px] text-gray-600">{c.resumen}</span>
       </div>
 
       {grupos.map((g) => (
-        <div key={g.so_id} className="px-4 py-2.5 border-b border-[#2c2c2e]/60">
+        <div key={g.so_id} className="px-4 py-2.5 border-b border-brain-border">
           <label className={`flex items-start gap-2 ${g.sin_terminos_pago ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
             <input type="checkbox" checked={incluidos.has(g.so_id)} disabled={g.sin_terminos_pago}
               onChange={(e) => setIncluidos((prev) => { const n = new Set(prev); if (e.target.checked) n.add(g.so_id); else n.delete(g.so_id); return n; })}
-              className="accent-[#6B58FF] mt-0.5 disabled:opacity-40" />
+              className="accent-brain-accent mt-0.5 disabled:opacity-40" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 text-[12px]">
-                <a href={g.so_url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">
+                <a href={g.so_url} target="_blank" rel="noreferrer" className="text-gray-900 hover:text-brain-accent truncate">
                   {g.so_nombre} {g.so_numero !== undefined && `· #${g.so_numero}`}
                 </a>
                 {g.cliente && <span className="text-gray-500 flex-shrink-0">{g.cliente}</span>}
                 {g.ya_comprado && (
                   <a href={g.ya_comprado.url} target="_blank" rel="noreferrer"
-                    className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 hover:underline">
+                    className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-brain-warning-bg text-amber-700 hover:underline">
                     ⚠ ya hay un PO para esta SO
                   </a>
                 )}
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Proveedor <span className="text-gray-300">{g.proveedor_nombre || '—'}</span>
-                {g.terminos_pago && <span> · Términos <span className="text-gray-300">{g.terminos_pago}</span></span>}
+                Proveedor <span className="text-gray-700">{g.proveedor_nombre || '—'}</span>
+                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span></span>}
               </p>
               {g.sin_terminos_pago && (
-                <p className="text-[11px] text-red-400 mt-0.5">
+                <p className="text-[11px] text-brain-error mt-0.5">
                   ⚠ Este cliente no tiene Condiciones de pago configuradas en 1CRM (campo obligatorio) —
                   configúralas en su cuenta antes de poder crear esta orden de compra.
                 </p>
@@ -1475,12 +1475,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               <div className="mt-1 space-y-0.5">
                 {g.links.map((l, i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
-                    <a href={l.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-[#6B58FF] truncate max-w-[240px]">
+                    <a href={l.url} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-brain-accent truncate max-w-[240px]">
                       {l.nombre || l.url}
                     </a>
                     <span className="font-mono text-gray-500">{l.part_number}</span>
                     {l.match_parcial && (
-                      <span className="px-1 py-0.5 rounded text-[10px] bg-amber-400/15 text-amber-300">≈ verificar</span>
+                      <span className="px-1 py-0.5 rounded text-[10px] bg-brain-warning-bg text-amber-700">≈ verificar</span>
                     )}
                     <span className="ml-auto text-gray-500 flex-shrink-0">{money(l.precio_costo)} {l.moneda}</span>
                   </div>
@@ -1492,12 +1492,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
       ))}
 
       {sinMatch.length > 0 && (
-        <div className="px-4 py-2.5 border-b border-[#2c2c2e]/60 bg-amber-400/5">
-          <p className="text-[10px] uppercase tracking-wider text-amber-500/80 mb-1">
+        <div className="px-4 py-2.5 border-b border-brain-border bg-brain-warning-bg">
+          <p className="text-[10px] uppercase tracking-wider text-amber-600 mb-1">
             Sin Sales Order — ¿es un gasto general?
           </p>
           {sinMatch.map((l, i) => (
-            <p key={i} className="text-[11px] text-amber-200/80 truncate">• {l.nombre || l.url}</p>
+            <p key={i} className="text-[11px] text-amber-700/80 truncate">• {l.nombre || l.url}</p>
           ))}
         </div>
       )}
@@ -1507,12 +1507,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada en el CRM'}
         </span>
         {estado === 'idle' && (
-          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
           </button>
         )}
         <button onClick={confirmarCrear} disabled={incluidos.size === 0 || estado !== 'idle'}
-          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : `Confirmar y crear ${incluidos.size || ''} PO(s)`}
         </button>
       </div>
@@ -1536,32 +1536,32 @@ function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?:
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#39FF14]/30 rounded-xl overflow-hidden">
+    <div className="bg-white border border-brain-success/30 rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>✅</span>
-        <span className="text-[13px] font-semibold text-white">Purchase Order(s) creados</span>
+        <span className="text-[13px] font-semibold text-gray-900">Purchase Order(s) creados</span>
       </div>
       <div className="px-4 pb-3 space-y-2">
         {resultados.map((r, i) => (
-          <div key={i} className="text-[12px] text-gray-300 border-t border-[#2c2c2e] pt-2 first:border-0 first:pt-0">
+          <div key={i} className="text-[12px] text-gray-700 border-t border-brain-border pt-2 first:border-0 first:pt-0">
             {r.ok ? (
               <>
-                <p className="text-gray-400">{r.proveedor} {r.total !== undefined && `· $${Number(r.total).toLocaleString('es-MX')}`}</p>
+                <p className="text-gray-600">{r.proveedor} {r.total !== undefined && `· $${Number(r.total).toLocaleString('es-MX')}`}</p>
                 <div className="flex items-center gap-3 mt-0.5">
-                  {r.po_url && <a href={r.po_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Purchase Order →</a>}
-                  {r.bill_url && <a href={r.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
-                  {r.so_url && <a href={r.so_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Sales Order →</a>}
+                  {r.po_url && <a href={r.po_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Purchase Order →</a>}
+                  {r.bill_url && <a href={r.bill_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Cuenta por pagar →</a>}
+                  {r.so_url && <a href={r.so_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Sales Order →</a>}
                   {deshechos.has(i) ? (
                     <span className="ml-auto text-[11px] text-gray-500">Deshecho</span>
                   ) : (
-                    <button onClick={() => deshacer(i, r)} className="ml-auto text-[11px] text-red-400/80 hover:text-red-300">
+                    <button onClick={() => deshacer(i, r)} className="ml-auto text-[11px] text-brain-error hover:text-brain-error">
                       Deshacer
                     </button>
                   )}
                 </div>
               </>
             ) : (
-              <p className="text-red-400">{r.error || 'No se pudo crear'}</p>
+              <p className="text-brain-error">{r.error || 'No se pudo crear'}</p>
             )}
           </div>
         ))}
@@ -1606,18 +1606,18 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
   }
 
   if (comp.error) {
-    return <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[12px] text-red-300">{comp.error}</div>;
+    return <div className="bg-white border border-brain-border rounded-xl px-4 py-2.5 text-[12px] text-brain-error">{comp.error}</div>;
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">🧾</span>
-        <span className="text-[12px] font-semibold text-white">Comprobante de pago</span>
-        <span className="ml-auto text-[12px] text-gray-300">{money(comp.monto)} {comp.moneda}</span>
+        <span className="text-[12px] font-semibold text-gray-900">Comprobante de pago</span>
+        <span className="ml-auto text-[12px] text-gray-700">{money(comp.monto)} {comp.moneda}</span>
       </div>
       {(comp.fecha || comp.referencia) && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[11px] text-gray-500">
+        <div className="px-4 py-2 border-b border-brain-border text-[11px] text-gray-500">
           {comp.fecha && <span>{comp.fecha}</span>}{comp.fecha && comp.referencia && ' · '}{comp.referencia}
         </div>
       )}
@@ -1626,24 +1626,24 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
         {cands.length === 0 && <p className="text-[12px] text-gray-500">No hay cuentas por pagar abiertas.</p>}
         {cands.map((b) => (
           <label key={b.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
-            <input type="radio" name={`bill-${streamId}`} checked={sel === b.id} onChange={() => setSel(b.id)} className="accent-[#6B58FF]" />
-            <span className="text-gray-200">{b.nombre}</span>
+            <input type="radio" name={`bill-${streamId}`} checked={sel === b.id} onChange={() => setSel(b.id)} className="accent-brain-accent" />
+            <span className="text-gray-900">{b.nombre}</span>
             <span className="text-gray-500">{b.proveedor}</span>
-            <span className="ml-auto text-gray-400">{money(b.amount_due)} pendiente</span>
+            <span className="ml-auto text-gray-600">{money(b.amount_due)} pendiente</span>
           </label>
         ))}
       </div>
-      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha registrado nada'}
         </span>
         {estado === 'idle' && (
-          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
           </button>
         )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
-          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Registrando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar pago'}
         </button>
       </div>
@@ -1663,22 +1663,22 @@ function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: b
     });
   }
   return (
-    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-success/30' : 'border-brain-error/40'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
-        <span className="text-[13px] font-semibold text-white">{data.ok ? 'Pago registrado' : 'No se pudo registrar'}</span>
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? 'Pago registrado' : 'No se pudo registrar'}</span>
       </div>
-      <div className="px-4 pb-3 text-[12px] text-gray-300 space-y-1">
-        {data.error && <p className="text-red-400">{data.error}</p>}
+      <div className="px-4 pb-3 text-[12px] text-gray-700 space-y-1">
+        {data.error && <p className="text-brain-error">{data.error}</p>}
         {data.ok && (
           <>
             <div className="flex items-center gap-3">
-              {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Payment →</a>}
-              {data.bill_url && <a href={data.bill_url} target="_blank" rel="noreferrer" className="text-[#6B58FF] hover:underline">Cuenta por pagar →</a>}
+              {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Payment →</a>}
+              {data.bill_url && <a href={data.bill_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Cuenta por pagar →</a>}
               {deshecho ? <span className="ml-auto text-[11px] text-gray-500">Deshecho</span> :
-                <button onClick={deshacer} className="ml-auto text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>}
+                <button onClick={deshacer} className="ml-auto text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>}
             </div>
-            {data.aviso && <p className="text-[11px] text-amber-300/80">{data.aviso}</p>}
+            {data.aviso && <p className="text-[11px] text-amber-700">{data.aviso}</p>}
           </>
         )}
       </div>
@@ -1724,49 +1724,49 @@ function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: {
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">📦</span>
-        <span className="text-[12px] font-semibold text-white">Recepción de mercancía</span>
+        <span className="text-[12px] font-semibold text-gray-900">Recepción de mercancía</span>
       </div>
       {data.tracking_texto && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[12px] text-gray-300">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
+        <div className="px-4 py-2 border-b border-brain-border text-[12px] text-gray-700">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
       )}
       {foto && !foto.error && (foto.items_detectados?.length ?? 0) > 0 && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e]">
+        <div className="px-4 py-2 border-b border-brain-border">
           <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Detectado en la foto</p>
-          {foto.items_detectados!.map((it, i) => <p key={i} className="text-[12px] text-gray-300">• {it}</p>)}
-          {foto.notas && <p className="text-[11px] text-amber-300/80 mt-1">{foto.notas}</p>}
+          {foto.items_detectados!.map((it, i) => <p key={i} className="text-[12px] text-gray-700">• {it}</p>)}
+          {foto.notas && <p className="text-[11px] text-amber-700 mt-1">{foto.notas}</p>}
         </div>
       )}
       <div className="px-4 py-2.5 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál compra es esta?</p>
         {data.sin_match && (
-          <p className="text-[11px] text-amber-300/80">
+          <p className="text-[11px] text-amber-700">
             No pude identificar cuál por el contenido — aquí están las más recientes en tránsito.
           </p>
         )}
         {candidatos.map((po) => (
           <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
-            <input type="radio" name={`po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-[#6B58FF] mt-0.5" />
+            <input type="radio" name={`po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-brain-accent mt-0.5" />
             <div>
-              <p className="text-gray-200">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
+              <p className="text-gray-900">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
               <p className="text-gray-500">{(po.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
             </div>
           </label>
         ))}
       </div>
-      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha cerrado nada'}
         </span>
         {estado === 'idle' && (
-          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
           </button>
         )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
-          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Cerrando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirma que coincide y cierra'}
         </button>
       </div>
@@ -1781,10 +1781,10 @@ function AjustesStock({ ajustes }: { ajustes?: AjusteStock[] }) {
     <div className="px-4 pb-2.5 space-y-0.5">
       <p className="text-[10px] uppercase tracking-wider text-gray-600">Stock</p>
       {ajustes.map((a, i) => (
-        <p key={i} className="text-[11px] text-gray-400">
+        <p key={i} className="text-[11px] text-gray-600">
           {a.ok
-            ? <>{a.producto || a.part_number}: <span className="text-gray-300">{a.stock_anterior} → {a.stock_nuevo}</span> ({a.delta && a.delta > 0 ? '+' : ''}{a.delta})</>
-            : <span className="text-amber-300/80">{a.part_number}: {a.motivo || 'no se pudo ajustar'}</span>}
+            ? <>{a.producto || a.part_number}: <span className="text-gray-700">{a.stock_anterior} → {a.stock_nuevo}</span> ({a.delta && a.delta > 0 ? '+' : ''}{a.delta})</>
+            : <span className="text-amber-700">{a.part_number}: {a.motivo || 'no se pudo ajustar'}</span>}
         </p>
       ))}
     </div>
@@ -1802,17 +1802,17 @@ function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boole
     });
   }
   return (
-    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-success/30' : 'border-brain-error/40'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
-        <span className="text-[13px] font-semibold text-white">{data.ok ? 'Purchase Order recibido' : 'No se pudo cerrar'}</span>
-        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? 'Purchase Order recibido' : 'No se pudo cerrar'}</span>
+        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver →</a>}
         {data.ok && (deshecho
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
-          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
+          : <button onClick={deshacer} className="text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>)}
       </div>
       <AjustesStock ajustes={data.ajustes_stock} />
-      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-brain-error">{data.error}</p>}
     </div>
   );
 }
@@ -1857,28 +1857,28 @@ function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: {
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">📦</span>
-        <span className="text-[12px] font-semibold text-white">Evidencia de recepción</span>
+        <span className="text-[12px] font-semibold text-gray-900">Evidencia de recepción</span>
       </div>
       {data.tracking_texto && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[12px] text-gray-300">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
+        <div className="px-4 py-2 border-b border-brain-border text-[12px] text-gray-700">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
       )}
       {pl && !pl.error && pl.es_packing_list && (pl.items?.length ?? 0) > 0 && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e]">
+        <div className="px-4 py-2 border-b border-brain-border">
           <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Packing list detectado</p>
           {pl.items!.map((it, i) => (
-            <p key={i} className="text-[12px] text-gray-300">
+            <p key={i} className="text-[12px] text-gray-700">
               • {it.cantidad}× {it.nombre} {it.mfr_part_no ? <span className="text-gray-500 font-mono">({it.mfr_part_no})</span> : null}
             </p>
           ))}
-          {pl.notas && <p className="text-[11px] text-amber-300/80 mt-1">{pl.notas}</p>}
+          {pl.notas && <p className="text-[11px] text-amber-700 mt-1">{pl.notas}</p>}
         </div>
       )}
       {pl && !pl.error && !pl.es_packing_list && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e]">
-          <p className="text-[11px] text-amber-300/80">
+        <div className="px-4 py-2 border-b border-brain-border">
+          <p className="text-[11px] text-amber-700">
             No parece un packing list con cantidades legibles{pl.notas ? ` — ${pl.notas}` : ''}. Igual se puede crear la recepción como pendiente.
           </p>
         </div>
@@ -1886,34 +1886,34 @@ function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: {
       <div className="px-4 py-2.5 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-gray-600">¿A cuál compra corresponde?</p>
         {data.sin_match && (
-          <p className="text-[11px] text-amber-300/80">
+          <p className="text-[11px] text-amber-700">
             No pude identificar cuál por el contenido — aquí están las más recientes en tránsito.
           </p>
         )}
         {candidatos.map((po) => (
           <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
-            <input type="radio" name={`recv-po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-[#6B58FF] mt-0.5" />
+            <input type="radio" name={`recv-po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-brain-accent mt-0.5" />
             <div>
-              <p className="text-gray-200">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
+              <p className="text-gray-900">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
               {po.so_nombre && (
-                <p className="text-gray-500">Venta: <span className="text-gray-300">{po.so_nombre}</span>{po.so_cliente ? ` · ${po.so_cliente}` : ''}</p>
+                <p className="text-gray-500">Venta: <span className="text-gray-700">{po.so_nombre}</span>{po.so_cliente ? ` · ${po.so_cliente}` : ''}</p>
               )}
               <p className="text-gray-500">{(po.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
             </div>
           </label>
         ))}
       </div>
-      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada'}
         </span>
         {estado === 'idle' && (
-          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
           </button>
         )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
-          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Es esta — crear pendiente'}
         </button>
       </div>
@@ -1950,21 +1950,21 @@ function ReceivingPendienteWidget({ data, streamId, yaConfirmado, onProcesando }
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">⏳</span>
-        <span className="text-[12px] font-semibold text-white">Recepción pendiente</span>
+        <span className="text-[12px] font-semibold text-gray-900">Recepción pendiente</span>
         {data.tracking && <span className="ml-auto text-[11px] text-gray-500 font-mono">{data.tracking}</span>}
       </div>
       {data.packing_list_notas && (
-        <div className="px-4 py-2 border-b border-[#2c2c2e] text-[11px] text-amber-300/80">{data.packing_list_notas}</div>
+        <div className="px-4 py-2 border-b border-brain-border text-[11px] text-amber-700">{data.packing_list_notas}</div>
       )}
       <div className="px-4 py-2.5 space-y-2">
         <p className="text-[10px] uppercase tracking-wider text-gray-600">Cantidades de esta entrega</p>
         {lineas.map((l, i) => (
           <div key={i} className="flex items-center gap-2 text-[12px]">
             <div className="flex-1 min-w-0">
-              <p className="text-gray-200 truncate">{l.name}</p>
+              <p className="text-gray-900 truncate">{l.name}</p>
               <p className="text-gray-500">
                 {l.mfr_part_no && <span className="font-mono">{l.mfr_part_no}</span>}
                 {' · restante '}{l.cantidad_restante ?? 0} de {l.cantidad_esperada ?? 0}
@@ -1975,15 +1975,15 @@ function ReceivingPendienteWidget({ data, streamId, yaConfirmado, onProcesando }
               type="number" min={0} disabled={estado !== 'idle'}
               value={cantidades[l.mfr_part_no || ''] ?? ''}
               onChange={(e) => setCantidades((c) => ({ ...c, [l.mfr_part_no || '']: e.target.value }))}
-              className="w-20 bg-[#0f0f10] border border-[#2c2c2e] rounded-md px-2 py-1 text-[12px] text-white text-right disabled:opacity-50"
+              className="w-20 bg-white border border-brain-border rounded-md px-2 py-1 text-[12px] text-gray-900 text-right focus:outline-none focus:ring-1 focus:ring-brain-accent disabled:opacity-50"
             />
           </div>
         ))}
       </div>
-      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">Pendiente · confirma ahora o cuando tengas el resto</span>
         <button onClick={confirmar} disabled={estado !== 'idle'}
-          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
           {estado === 'confirmando' ? 'Confirmando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar recepción'}
         </button>
       </div>
@@ -2003,20 +2003,20 @@ function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { o
     });
   }
   return (
-    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-success/30' : 'border-brain-error/40'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
-        <span className="text-[13px] font-semibold text-white">
+        <span className="text-[13px] font-semibold text-gray-900">
           {data.ok ? (data.completo ? 'Purchase Order recibido completo' : 'Recepción parcial confirmada') : 'No se pudo confirmar'}
         </span>
-        {data.ok && !data.completo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-300/90">Parcial</span>}
-        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        {data.ok && !data.completo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-brain-warning-bg text-amber-700/90">Parcial</span>}
+        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver →</a>}
         {data.ok && (deshecho
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
-          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
+          : <button onClick={deshacer} className="text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>)}
       </div>
       <AjustesStock ajustes={data.ajustes_stock} />
-      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-brain-error">{data.error}</p>}
     </div>
   );
 }
@@ -2054,43 +2054,43 @@ function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { da
   }
 
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">📄</span>
-        <span className="text-[12px] font-semibold text-white">Cierre de venta</span>
+        <span className="text-[12px] font-semibold text-gray-900">Cierre de venta</span>
       </div>
       <div className="px-4 py-2.5 space-y-1.5">
         <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál Sales Order?</p>
         {candidatos.map((so) => (
           <label key={so.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
-            <input type="radio" name={`so-cierre-${streamId}`} checked={sel === so.id} onChange={() => setSel(so.id)} className="accent-[#6B58FF]" />
-            <span className="text-gray-200">{so.nombre}</span>
+            <input type="radio" name={`so-cierre-${streamId}`} checked={sel === so.id} onChange={() => setSel(so.id)} className="accent-brain-accent" />
+            <span className="text-gray-900">{so.nombre}</span>
             <span className="text-gray-500">{so.cliente}</span>
             <span className="ml-auto text-[10px] text-gray-600">{so.so_stage}</span>
           </label>
         ))}
       </div>
       {sel && (
-        <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-4 text-[12px]">
-          <label className="flex items-center gap-1.5 cursor-pointer text-gray-300">
-            <input type="checkbox" checked={entregado} onChange={(e) => setEntregado(e.target.checked)} className="accent-[#6B58FF]" /> Ya se entregó
+        <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-4 text-[12px]">
+          <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+            <input type="checkbox" checked={entregado} onChange={(e) => setEntregado(e.target.checked)} className="accent-brain-accent" /> Ya se entregó
           </label>
-          <label className="flex items-center gap-1.5 cursor-pointer text-gray-300">
-            <input type="checkbox" checked={facturado} onChange={(e) => setFacturado(e.target.checked)} className="accent-[#6B58FF]" /> Factura firmada
+          <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
+            <input type="checkbox" checked={facturado} onChange={(e) => setFacturado(e.target.checked)} className="accent-brain-accent" /> Factura firmada
           </label>
         </div>
       )}
-      <div className="px-4 py-2.5 border-t border-[#2c2c2e] flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha actualizado nada'}
         </span>
         {estado === 'idle' && (
-          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-400 border border-[#2c2c2e] hover:text-gray-200 hover:border-[#444] transition">
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna es
           </button>
         )}
         <button onClick={confirmar} disabled={!sel || (!entregado && !facturado) || estado !== 'idle'}
-          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-[#39FF14] text-black disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar'}
         </button>
       </div>
@@ -2110,26 +2110,26 @@ function SOCerradaEtapa4Widget({ data, streamId, onProcesando }: { data: { ok?: 
     });
   }
   return (
-    <div className={`bg-[#1c1c1e] border rounded-xl overflow-hidden ${data.ok ? 'border-[#39FF14]/30' : 'border-red-500/30'}`}>
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-success/30' : 'border-brain-error/40'}`}>
       <div className="px-4 py-2.5 flex items-center gap-2">
         <span>{data.ok ? '✅' : '⚠️'}</span>
-        <span className="text-[13px] font-semibold text-white">{data.ok ? `Sales Order → ${data.so_stage}` : 'No se pudo actualizar'}</span>
-        {data.so_url && <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-[#6B58FF] hover:underline text-[12px]">Ver →</a>}
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? `Sales Order → ${data.so_stage}` : 'No se pudo actualizar'}</span>
+        {data.so_url && <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver →</a>}
         {data.ok && (deshecho
           ? <span className="text-[11px] text-gray-500">Deshecho</span>
-          : <button onClick={deshacer} className="text-[11px] text-red-400/80 hover:text-red-300">Deshacer</button>)}
+          : <button onClick={deshacer} className="text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>)}
       </div>
       <AjustesStock ajustes={data.ajustes_stock} />
-      {data.error && <p className="px-4 pb-2.5 text-[12px] text-red-400">{data.error}</p>}
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-brain-error">{data.error}</p>}
     </div>
   );
 }
 
 function AccionDeshechaWidget({ data }: { data: { ok?: boolean; error?: string; que?: string } }) {
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl px-4 py-2.5 flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl px-4 py-2.5 flex items-center gap-2">
       <span>{data.ok ? '↩️' : '⚠️'}</span>
-      <span className="text-[12px] text-gray-300">
+      <span className="text-[12px] text-gray-700">
         {data.ok ? `Deshecho: ${data.que || 'la acción anterior'}` : (data.error || 'No se pudo deshacer')}
       </span>
     </div>
@@ -2150,7 +2150,7 @@ interface VentaEstado {
 function EtapaPill({ label, hecho, total, siempre }: { label: string; hecho: number; total?: number; siempre?: boolean }) {
   const completo = siempre || (total !== undefined && total > 0 && hecho >= total);
   const pendiente = !siempre && (!total || total === 0);
-  const color = completo ? 'bg-[#39FF14]/15 text-[#39FF14]' : pendiente ? 'bg-gray-600/20 text-gray-500' : 'bg-amber-400/15 text-amber-300';
+  const color = completo ? 'bg-brain-success-bg text-brain-success' : pendiente ? 'bg-gray-100 text-gray-500' : 'bg-brain-warning-bg text-amber-700';
   return (
     <div className="flex items-center gap-1.5">
       <span className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${color}`}>
@@ -2164,9 +2164,9 @@ function VentaEstadoRow({ v }: { v: VentaEstado }) {
   const pagado = v.pagado || { total: 0, hecho: 0 };
   const recibido = v.recibido || { total: 0, hecho: 0 };
   return (
-    <div className="px-4 py-2.5 border-b border-[#2c2c2e]/60 last:border-0">
+    <div className="px-4 py-2.5 border-b border-brain-border last:border-0">
       <div className="flex items-center gap-2 text-[12px] mb-1.5">
-        <a href={v.so_url} target="_blank" rel="noreferrer" className="text-gray-200 hover:text-[#6B58FF] truncate">
+        <a href={v.so_url} target="_blank" rel="noreferrer" className="text-gray-900 hover:text-brain-accent truncate">
           {v.so_nombre} {v.so_numero !== undefined && `· #${v.so_numero}`}
         </a>
         {v.cliente && <span className="text-gray-500 flex-shrink-0">{v.cliente}</span>}
@@ -2185,7 +2185,7 @@ function VentaEstadoRow({ v }: { v: VentaEstado }) {
       {comprado.pos && comprado.pos.length > 0 && (
         <div className="mt-1.5 flex items-center gap-3 flex-wrap">
           {comprado.pos.map((po) => (
-            <a key={po.id} href={po.url} target="_blank" rel="noreferrer" className="text-[10px] text-gray-500 hover:text-[#6B58FF] truncate">
+            <a key={po.id} href={po.url} target="_blank" rel="noreferrer" className="text-[10px] text-gray-500 hover:text-brain-accent truncate">
               {po.nombre} →
             </a>
           ))}
@@ -2197,10 +2197,10 @@ function VentaEstadoRow({ v }: { v: VentaEstado }) {
 function EstadoOperativoWidget({ data }: { data: { ventas?: VentaEstado[] } }) {
   const ventas = data.ventas || [];
   return (
-    <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">📊</span>
-        <span className="text-[12px] font-semibold text-white">Estado operativo</span>
+        <span className="text-[12px] font-semibold text-gray-900">Estado operativo</span>
       </div>
       {ventas.length === 0
         ? <p className="px-4 py-3 text-[12px] text-gray-500">Sin ventas para mostrar.</p>
