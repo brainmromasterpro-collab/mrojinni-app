@@ -1778,16 +1778,30 @@ function CotejoRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: {
 interface AjusteStock { ok?: boolean; part_number?: string; producto?: string; motivo?: string; stock_anterior?: number; stock_nuevo?: number; delta?: number }
 function AjustesStock({ ajustes }: { ajustes?: AjusteStock[] }) {
   if (!ajustes || ajustes.length === 0) return null;
+  const aplicados = ajustes.filter((a) => a.ok);
+  const fallidos = ajustes.filter((a) => !a.ok);
   return (
-    <div className="px-4 pb-2.5 space-y-0.5">
-      <p className="text-[10px] uppercase tracking-wider text-gray-600">Stock</p>
-      {ajustes.map((a, i) => (
-        <p key={i} className="text-[11px] text-gray-600">
-          {a.ok
-            ? <>{a.producto || a.part_number}: <span className="text-gray-700">{a.stock_anterior} → {a.stock_nuevo}</span> ({a.delta && a.delta > 0 ? '+' : ''}{a.delta})</>
-            : <span className="text-amber-700">{a.part_number}: {a.motivo || 'no se pudo ajustar'}</span>}
-        </p>
-      ))}
+    <div className="mx-4 mb-3 rounded-lg border border-brain-border bg-brain-surface overflow-hidden">
+      <div className="px-3 py-1.5 border-b border-brain-border flex items-center gap-1.5">
+        <span className="text-[11px]">📦</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Stock actualizado en el catálogo</span>
+      </div>
+      <div className="px-3 py-1.5 space-y-1">
+        {aplicados.map((a, i) => (
+          <div key={`ok-${i}`} className="flex items-center gap-2 text-[11px]">
+            <span className="flex-1 min-w-0 truncate text-gray-700">{a.producto || a.part_number}</span>
+            <span className="text-gray-500 tabular-nums">{a.stock_anterior}</span>
+            <span className="text-gray-400">→</span>
+            <span className="text-gray-900 font-semibold tabular-nums">{a.stock_nuevo}</span>
+            <span className="text-brain-success font-medium tabular-nums w-9 text-right">{a.delta && a.delta > 0 ? '+' : ''}{a.delta}</span>
+          </div>
+        ))}
+        {fallidos.map((a, i) => (
+          <p key={`no-${i}`} className="text-[11px] text-amber-700">
+            <span className="font-mono">{a.part_number}</span>: {a.motivo || 'no se pudo ajustar'} — no se movió el stock.
+          </p>
+        ))}
+      </div>
     </div>
   );
 }
