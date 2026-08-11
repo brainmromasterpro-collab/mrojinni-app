@@ -616,7 +616,9 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
               yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')}
               yaConfirmadoReceivingCotejo={laterHasMarker('[RECEIVING_ESTADO]') || laterHasMarker('[RECEIVING_RECEPCION]')}
               yaConfirmadoReceivingPendiente={laterHasMarker('[RECEIVING_CONFIRMADO]')}
-              yaConfirmadoReceivingRecepcion={laterHasMarker('[RECEIVING_CONFIRMADO]')} />;
+              yaConfirmadoReceivingRecepcion={laterHasMarker('[RECEIVING_CONFIRMADO]')}
+              yaConfirmadoShippingCotejo={laterHasMarker('[SHIPPING_FORM]') || laterHasMarker('[SHIPPING_ENVIADO]')}
+              yaConfirmadoShippingForm={laterHasMarker('[SHIPPING_CREADO]')} />;
           })}
 
         </div>
@@ -2181,6 +2183,218 @@ function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { o
 }
 
 // ─────────────────────────────────────────────────────────────
+// SHIPPING (stream 'ordenes' / Sales order) — envío al cliente
+// tracking → elegir SO → form (líneas + peso/dims/costo) → In Preparation → "shipped" → Shipped
+// ─────────────────────────────────────────────────────────────
+interface ShippingCand {
+  id?: string; nombre?: string; cliente?: string; so_stage?: string; url?: string;
+  lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[];
+  // para modo marcar_shipped, los candidatos son SHIPPING_CREADO:
+  shipping_id?: string; so_id?: string; tracking?: string; shipping_url?: string;
+}
+interface ShippingCotejoData {
+  modo?: 'elegir_so' | 'marcar_shipped';
+  tracking?: string;
+  candidatos?: ShippingCand[];
+  sin_match?: boolean;
+}
+function ShippingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ShippingCotejoData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const candidatos = data.candidatos || [];
+  const modo = data.modo || 'elegir_so';
+  const idOf = (c: ShippingCand) => (modo === 'marcar_shipped' ? c.shipping_id : c.id) || '';
+  const [sel, setSel] = useState<string>(candidatos.length === 1 ? idOf(candidatos[0]) : '');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
+
+  const cfg = modo === 'marcar_shipped'
+    ? { icon: '🚚', title: 'Marcar como enviado', hint: 'Elige el envío que ya salió', cta: 'Marcar enviado', busy: '🚚 Marcando como enviado…' }
+    : { icon: '📦', title: 'Envío al cliente', hint: 'Elige a cuál Sales Order corresponde', cta: 'Preparar envío', busy: '📦 Preparando el envío…' };
+
+  async function confirmar() {
+    if (!sel || !streamId) return;
+    const cand = candidatos.find((c) => idOf(c) === sel);
+    setEstado('creando');
+    onProcesando?.(cfg.busy);
+    const meta: Record<string, unknown> = modo === 'marcar_shipped'
+      ? { shipping_action: 'marcar_shipped', shipping_id: sel, lineas: cand?.lineas || [], so_id: cand?.so_id || '', tracking: cand?.tracking || '' }
+      : { shipping_action: 'preparar', so_id: sel, tracking: data.tracking || '' };
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: cfg.cta, procesado: false, metadata: meta,
+    });
+    setEstado('listo');
+  }
+  async function cancelar() {
+    if (!streamId) return;
+    setEstado('cancelado');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false, metadata: { cancelar_accion: true },
+    });
+  }
+
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">{cfg.icon}</span>
+        <span className="text-[12px] font-semibold text-gray-900">{cfg.title}</span>
+      </div>
+      {data.tracking && (
+        <div className="px-4 py-2 border-b border-brain-border text-[12px] text-gray-700">Tracking: <span className="font-mono">{data.tracking}</span></div>
+      )}
+      <div className="px-4 py-2.5 space-y-2">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">{cfg.hint}</p>
+        {data.sin_match && <p className="text-[11px] text-amber-700">No pude identificarlo solo — elige el correcto.</p>}
+        {candidatos.map((c) => {
+          const id = idOf(c);
+          return (
+            <label key={id} className="flex items-start gap-2 text-[12px] cursor-pointer">
+              <input type="radio" name={`ship-${modo}-${streamId}`} checked={sel === id} onChange={() => setSel(id)} className="accent-brain-accent mt-0.5" />
+              <div>
+                <p className="text-gray-900">{c.nombre}{c.cliente ? <span className="text-gray-500"> · {c.cliente}</span> : null}</p>
+                {c.tracking && <p className="text-gray-500 font-mono">{c.tracking}</p>}
+                <p className="text-gray-500">{(c.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
+              </div>
+            </label>
+          );
+        })}
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">{estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada'}</span>
+        {estado === 'idle' && (
+          <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">Ninguna coincide</button>
+        )}
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
+          className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
+          {estado === 'creando' ? '…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : cfg.cta}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ShippingFormLinea { name?: string; mfr_part_no?: string; cantidad_pedida?: number; cantidad_enviada_previo?: number; cantidad_restante?: number; cantidad_sugerida?: number; enviar?: boolean }
+interface ShippingFormData { so_id?: string; tracking?: string; lineas?: ShippingFormLinea[] }
+function ShippingFormWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ShippingFormData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const lineas = data.lineas || [];
+  const [check, setCheck] = useState<Record<string, boolean>>(() => {
+    const i: Record<string, boolean> = {}; lineas.forEach((l) => { if (l.mfr_part_no) i[l.mfr_part_no] = l.enviar ?? ((l.cantidad_restante ?? 0) > 0); }); return i;
+  });
+  const [cant, setCant] = useState<Record<string, string>>(() => {
+    const i: Record<string, string> = {}; lineas.forEach((l) => { if (l.mfr_part_no) i[l.mfr_part_no] = String(l.cantidad_sugerida ?? l.cantidad_restante ?? 0); }); return i;
+  });
+  const [peso, setPeso] = useState(''); const [dims, setDims] = useState(''); const [costo, setCosto] = useState(''); const [paquetes, setPaquetes] = useState('1');
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+
+  async function confirmar() {
+    if (!streamId || !data.so_id) return;
+    const ls = lineas.filter((l) => l.mfr_part_no && check[l.mfr_part_no] && parseFloat(cant[l.mfr_part_no] || '0') > 0)
+      .map((l) => ({ name: l.name, mfr_part_no: l.mfr_part_no, quantity: parseFloat(cant[l.mfr_part_no!] || '0') }));
+    if (ls.length === 0) return;
+    setEstado('creando');
+    onProcesando?.('📦 Creando el envío en preparación…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Crear envío', procesado: false,
+      metadata: { shipping_action: 'crear', so_id: data.so_id, lineas: ls,
+        datos: { tracking: data.tracking || '', peso_lbs: parseFloat(peso || '0') || 0, dimensiones: dims,
+                 costo_envio: parseFloat(costo || '0') || 0, num_packages: parseInt(paquetes || '1') || 1 } },
+    });
+    setEstado('listo');
+  }
+  const algo = lineas.some((l) => l.mfr_part_no && check[l.mfr_part_no]);
+  const inputCls = 'w-full bg-white border border-brain-border rounded-md px-2 py-1 text-[12px] text-gray-900 focus:outline-none focus:ring-1 focus:ring-brain-accent disabled:opacity-40';
+
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">📦</span>
+        <span className="text-[12px] font-semibold text-gray-900">Preparar envío</span>
+        {data.tracking && <span className="ml-auto text-[11px] text-gray-500 font-mono">{data.tracking}</span>}
+      </div>
+      <div className="px-4 py-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">Qué se envía</p>
+        {lineas.map((l, i) => {
+          const pn = l.mfr_part_no || ''; const on = !!check[pn];
+          return (
+            <div key={i} className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" disabled={estado !== 'idle'} checked={on} onChange={(e) => setCheck((c) => ({ ...c, [pn]: e.target.checked }))} className="accent-brain-accent" />
+              <div className="flex-1 min-w-0">
+                <p className={on ? 'text-gray-900 truncate' : 'text-gray-500 truncate'}>{l.name}</p>
+                <p className="text-gray-500">{pn && <span className="font-mono">{pn}</span>}{' · falta '}{l.cantidad_restante ?? 0} de {l.cantidad_pedida ?? 0}</p>
+              </div>
+              <input type="number" min={0} disabled={estado !== 'idle' || !on} value={cant[pn] ?? ''} onChange={(e) => setCant((c) => ({ ...c, [pn]: e.target.value }))}
+                className="w-20 bg-white border border-brain-border rounded-md px-2 py-1 text-[12px] text-gray-900 text-right focus:outline-none focus:ring-1 focus:ring-brain-accent disabled:opacity-40" />
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border grid grid-cols-2 gap-2">
+        <label className="text-[10px] uppercase tracking-wider text-gray-600">Peso (lbs)
+          <input type="number" min={0} disabled={estado !== 'idle'} value={peso} onChange={(e) => setPeso(e.target.value)} className={inputCls} /></label>
+        <label className="text-[10px] uppercase tracking-wider text-gray-600">Paquetes
+          <input type="number" min={1} disabled={estado !== 'idle'} value={paquetes} onChange={(e) => setPaquetes(e.target.value)} className={inputCls} /></label>
+        <label className="text-[10px] uppercase tracking-wider text-gray-600">Dimensiones
+          <input type="text" disabled={estado !== 'idle'} value={dims} onChange={(e) => setDims(e.target.value)} placeholder="40x30x20 cm" className={inputCls} /></label>
+        <label className="text-[10px] uppercase tracking-wider text-gray-600">Costo de envío
+          <input type="number" min={0} disabled={estado !== 'idle'} value={costo} onChange={(e) => setCosto(e.target.value)} className={inputCls} /></label>
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Queda en preparación · luego teclea «shipped»</span>
+        <button onClick={confirmar} disabled={estado !== 'idle' || !algo}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Crear envío'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ShippingCreadoWidget({ data }: { data: { ok?: boolean; error?: string; shipping_url?: string; tracking?: string; lineas?: { name?: string; quantity?: number }[] } }) {
+  return (
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-border' : 'border-brain-error/40'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '📦' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? 'Envío en preparación' : 'No se pudo crear el envío'}</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-brain-warning-bg text-amber-700">In Preparation</span>
+        {data.shipping_url && <a href={data.shipping_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver →</a>}
+      </div>
+      {data.ok && (
+        <div className="px-4 pb-2 text-[12px] text-gray-700">
+          {(data.lineas || []).map((l, i) => <span key={i}>{i > 0 ? ', ' : ''}{l.quantity}× {l.name}</span>)}
+          <p className="text-[10px] text-gray-500 mt-1">Cuando salga físicamente, teclea «shipped» para descontar el stock.</p>
+        </div>
+      )}
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-brain-error">{data.error}</p>}
+    </div>
+  );
+}
+
+function ShippingEnviadoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; shipping_id?: string; so_id?: string; so_stage?: string; so_stage_anterior?: string; shipping_url?: string; so_url?: string; ajustes_stock?: AjusteStock[]; lineas?: { name?: string; mfr_part_no?: string; quantity?: number }[] }; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Deshaciendo el envío…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer envío', procesado: false,
+      metadata: { shipping_action: 'deshacer', shipping_id: data.shipping_id, lineas: data.lineas || [], so_id: data.so_id, estaba_enviado: true, so_stage_anterior: data.so_stage_anterior || 'Ordered' },
+    });
+  }
+  return (
+    <div className={`bg-white border rounded-xl overflow-hidden ${data.ok ? 'border-brain-success/30' : 'border-brain-error/40'}`}>
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? 'Envío marcado como enviado' : 'No se pudo marcar'}</span>
+        {data.so_stage && <span className="text-[10px] px-1.5 py-0.5 rounded bg-brain-accent/10 text-brain-accent">{data.so_stage}</span>}
+        {data.so_url && <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver SO →</a>}
+        {data.ok && (deshecho
+          ? <span className="text-[11px] text-gray-500">Deshecho</span>
+          : <button onClick={deshacer} className="text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>)}
+      </div>
+      <AjustesStock ajustes={data.ajustes_stock} />
+      {data.error && <p className="px-4 pb-2.5 text-[12px] text-brain-error">{data.error}</p>}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // ETAPA 4 — CIERRE DE VENTA: elegir la Sales Order → confirmar entrega/factura → so_stage
 // ─────────────────────────────────────────────────────────────
 interface SOCandidata { id: string; nombre: string; so_stage?: string; cliente?: string; url?: string }
@@ -2476,8 +2690,10 @@ interface MessageBubbleProps {
   yaConfirmadoReceivingCotejo?: boolean;
   yaConfirmadoReceivingPendiente?: boolean;
   yaConfirmadoReceivingRecepcion?: boolean;
+  yaConfirmadoShippingCotejo?: boolean;
+  yaConfirmadoShippingForm?: boolean;
 }
-function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente, yaConfirmadoReceivingRecepcion }: MessageBubbleProps) {
+function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente, yaConfirmadoReceivingRecepcion, yaConfirmadoShippingCotejo, yaConfirmadoShippingForm }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -2547,6 +2763,14 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const receivingEstadoData: ReceivingEstadoData | null = receivingEstadoRes?.json || null;
   const receivingRecepcionRes = extractMarkerJson(rawText, '[RECEIVING_RECEPCION]');
   const receivingRecepcionData: ReceivingRecepcionData | null = receivingRecepcionRes?.json || null;
+  const shippingCotejoRes = extractMarkerJson(rawText, '[SHIPPING_COTEJO]');
+  const shippingCotejoData: ShippingCotejoData | null = shippingCotejoRes?.json || null;
+  const shippingFormRes = extractMarkerJson(rawText, '[SHIPPING_FORM]');
+  const shippingFormData: ShippingFormData | null = shippingFormRes?.json || null;
+  const shippingCreadoRes = extractMarkerJson(rawText, '[SHIPPING_CREADO]');
+  const shippingCreadoData = (shippingCreadoRes?.json || null) as { ok?: boolean; error?: string; shipping_url?: string; tracking?: string; lineas?: { name?: string; quantity?: number }[] } | null;
+  const shippingEnviadoRes = extractMarkerJson(rawText, '[SHIPPING_ENVIADO]');
+  const shippingEnviadoData = (shippingEnviadoRes?.json || null) as { ok?: boolean; error?: string; shipping_id?: string; so_id?: string; so_stage?: string; so_stage_anterior?: string; shipping_url?: string; so_url?: string; ajustes_stock?: AjusteStock[]; lineas?: { name?: string; mfr_part_no?: string; quantity?: number }[] } | null;
   const receivingConfirmadoRes = extractMarkerJson(rawText, '[RECEIVING_CONFIRMADO]');
   const receivingConfirmadoData = (receivingConfirmadoRes?.json || null) as { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number> } | null;
   let displayText = rawText
@@ -2575,6 +2799,10 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (receivingEstadoRes) displayText = displayText.replace(receivingEstadoRes.raw, '').trimEnd();
   if (receivingRecepcionRes) displayText = displayText.replace(receivingRecepcionRes.raw, '').trimEnd();
   if (receivingConfirmadoRes) displayText = displayText.replace(receivingConfirmadoRes.raw, '').trimEnd();
+  if (shippingCotejoRes) displayText = displayText.replace(shippingCotejoRes.raw, '').trimEnd();
+  if (shippingFormRes) displayText = displayText.replace(shippingFormRes.raw, '').trimEnd();
+  if (shippingCreadoRes) displayText = displayText.replace(shippingCreadoRes.raw, '').trimEnd();
+  if (shippingEnviadoRes) displayText = displayText.replace(shippingEnviadoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
     setDecided(answer);
@@ -2600,6 +2828,10 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {receivingEstadoData && <ReceivingEstadoWidget data={receivingEstadoData} />}
         {receivingRecepcionData && <ReceivingRecepcionWidget data={receivingRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingRecepcion} onProcesando={onProcesando} />}
         {receivingConfirmadoData && <ReceivingConfirmadoWidget data={receivingConfirmadoData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {shippingCotejoData && <ShippingCotejoWidget data={shippingCotejoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoShippingCotejo} onProcesando={onProcesando} />}
+        {shippingFormData && <ShippingFormWidget data={shippingFormData} streamId={message.stream_id} yaConfirmado={yaConfirmadoShippingForm} onProcesando={onProcesando} />}
+        {shippingCreadoData && <ShippingCreadoWidget data={shippingCreadoData} />}
+        {shippingEnviadoData && <ShippingEnviadoWidget data={shippingEnviadoData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {accionDeshechaData && <AccionDeshechaWidget data={accionDeshechaData} />}
         {estadoOperativoData && <EstadoOperativoWidget data={estadoOperativoData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
