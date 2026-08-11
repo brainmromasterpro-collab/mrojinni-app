@@ -2401,18 +2401,18 @@ interface SOCandidata { id: string; nombre: string; so_stage?: string; cliente?:
 function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { data: { candidatos?: SOCandidata[] }; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const candidatos = data.candidatos || [];
   const [sel, setSel] = useState<string>('');
-  const [entregado, setEntregado] = useState(false);
   const [facturado, setFacturado] = useState(false);
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
 
   async function confirmar() {
-    if (!sel || !streamId || (!entregado && !facturado)) return;
+    if (!sel || !streamId) return;
     setEstado('creando');
     onProcesando?.('📄 Actualizando el cierre de la venta…');
     const so = candidatos.find((s) => s.id === sel);
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Actualizar cierre de venta', procesado: false,
-      metadata: { cierre_action: 'confirmar', so_id: sel, entregado, facturado, estado_anterior: so?.so_stage || '' },
+      // Lo enviado se deriva del historial de envíos; aquí solo se marca si ya está la factura.
+      metadata: { cierre_action: 'confirmar', so_id: sel, facturado, estado_anterior: so?.so_stage || '' },
     });
     setEstado('listo');
   }
@@ -2444,13 +2444,13 @@ function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { da
         ))}
       </div>
       {sel && (
-        <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-4 text-[12px]">
+        <div className="px-4 py-2.5 border-t border-brain-border space-y-1 text-[12px]">
           <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
-            <input type="checkbox" checked={entregado} onChange={(e) => setEntregado(e.target.checked)} className="accent-brain-accent" /> Ya se entregó
+            <input type="checkbox" checked={facturado} onChange={(e) => setFacturado(e.target.checked)} className="accent-brain-accent" /> Ya está la factura
           </label>
-          <label className="flex items-center gap-1.5 cursor-pointer text-gray-700">
-            <input type="checkbox" checked={facturado} onChange={(e) => setFacturado(e.target.checked)} className="accent-brain-accent" /> Factura firmada
-          </label>
+          <p className="text-[10px] text-gray-500">
+            Lo enviado se toma solo de los envíos (shipping). El SO se cierra cuando esté todo enviado y facturado.
+          </p>
         </div>
       )}
       <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
@@ -2462,9 +2462,9 @@ function CotejoCierreWidget({ data, streamId, yaConfirmado, onProcesando }: { da
             Ninguna es
           </button>
         )}
-        <button onClick={confirmar} disabled={!sel || (!entregado && !facturado) || estado !== 'idle'}
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
           className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
-          {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar'}
+          {estado === 'creando' ? 'Actualizando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Actualizar factura'}
         </button>
       </div>
     </div>
