@@ -614,8 +614,9 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
               yaConfirmadoPago={laterHasMarker('[PAGO_REGISTRADO]')}
               yaConfirmadoRecepcion={laterHasMarker('[PO_RECIBIDO]')}
               yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')}
-              yaConfirmadoReceivingCotejo={laterHasMarker('[RECEIVING_PENDIENTE]')}
-              yaConfirmadoReceivingPendiente={laterHasMarker('[RECEIVING_CONFIRMADO]')} />;
+              yaConfirmadoReceivingCotejo={laterHasMarker('[RECEIVING_ESTADO]') || laterHasMarker('[RECEIVING_RECEPCION]')}
+              yaConfirmadoReceivingPendiente={laterHasMarker('[RECEIVING_CONFIRMADO]')}
+              yaConfirmadoReceivingRecepcion={laterHasMarker('[RECEIVING_CONFIRMADO]')} />;
           })}
 
         </div>
@@ -1824,25 +1825,46 @@ function PORecibidoWidget({ data, streamId, onProcesando }: { data: { ok?: boole
 // stock. Reemplaza el flujo de un solo paso de CotejoRecepcionWidget/PORecibidoWidget de arriba
 // (esos quedan para renderizar mensajes históricos ya guardados con esos marcadores).
 // ─────────────────────────────────────────────────────────────
+// Receiving v2 — cotejo multi-modo: activar (order confirmation/packing list) · tracking (en
+// tránsito) · recepcion (llegó el paquete → checklist). Un candidato puede venir como PO
+// (id/nombre/lineas) o como receiving activo (po_id/po_nombre/lineas_po) — se normaliza.
+interface ReceivingDoc { tipo?: string; items?: { nombre?: string; mfr_part_no?: string; cantidad?: number }[]; tracking?: string; notas?: string; error?: string }
+interface ReceivingCand { id?: string; po_id?: string; nombre?: string; po_nombre?: string; proveedor?: string; so_nombre?: string; so_cliente?: string; so_id?: string; url?: string; so_url?: string; estatus?: string; packing_list?: { items?: { nombre?: string; mfr_part_no?: string; cantidad?: number }[] } | null; lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[]; lineas_po?: { name?: string; mfr_part_no?: string; quantity?: string | number }[] }
 interface ReceivingCotejoData {
-  tracking_texto?: string;
-  packing_list?: { es_packing_list?: boolean; items?: { nombre?: string; mfr_part_no?: string; cantidad?: number }[]; notas?: string; error?: string } | null;
-  candidatos?: POCandidata[];
+  modo?: 'activar' | 'tracking' | 'recepcion';
+  doc?: ReceivingDoc | null;
+  tracking?: string;
+  guia?: string;
+  candidatos?: ReceivingCand[];
   sin_match?: boolean;
 }
+const candId = (c: ReceivingCand) => c.po_id || c.id || '';
+const candNombre = (c: ReceivingCand) => c.po_nombre || c.nombre || '';
+const candLineas = (c: ReceivingCand) => c.lineas_po || c.lineas || [];
 function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ReceivingCotejoData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const candidatos = data.candidatos || [];
-  const [sel, setSel] = useState<string>(candidatos.length === 1 ? candidatos[0].id : '');
+  const modo = data.modo || 'activar';
+  const [sel, setSel] = useState<string>(candidatos.length === 1 ? candId(candidatos[0]) : '');
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
-  const pl = data.packing_list;
+  const doc = data.doc;
+
+  const cfg = {
+    activar:   { icon: '📦', title: 'Documento de recepción', progreso: 'El proveedor confirmó / mandó el packing list', cta: 'Es esta — activar receiving', busy: '📦 Activando el receiving…' },
+    tracking:  { icon: '🚚', title: 'Tracking recibido', progreso: 'El envío ya va en camino', cta: 'Marcar en tránsito', busy: '🚚 Marcando en tránsito…' },
+    recepcion: { icon: '📬', title: 'Llegó el paquete', progreso: 'Elige a cuál pedido pendiente corresponde', cta: 'Recibir este pedido', busy: '📬 Abriendo el checklist de recepción…' },
+  }[modo];
 
   async function confirmar() {
     if (!sel || !streamId) return;
+    const cand = candidatos.find((c) => candId(c) === sel);
     setEstado('creando');
-    onProcesando?.('📦 Registrando la recepción como pendiente…');
+    onProcesando?.(cfg.busy);
+    const meta: Record<string, unknown> =
+      modo === 'activar'   ? { receiving_action: 'activar', po_id: sel, candidato: cand, doc: doc || null, tracking: data.tracking || '' }
+      : modo === 'tracking' ? { receiving_action: 'tracking', po_id: sel, tracking: data.tracking || '' }
+      :                       { receiving_action: 'iniciar_recepcion', po_id: sel, guia: data.guia || '' };
     await supabase.from('mensajes').insert({
-      stream_id: streamId, role: 'user', content: 'Crear recepción pendiente', procesado: false,
-      metadata: { receiving_action: 'crear_pendiente', po_id: sel, tracking: data.tracking_texto || '', packing_list: pl || null },
+      stream_id: streamId, role: 'user', content: cfg.cta, procesado: false, metadata: meta,
     });
     setEstado('listo');
   }
@@ -1856,57 +1878,66 @@ function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: {
     });
   }
 
+  const items = doc?.items || [];
   return (
     <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
       <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
-        <span className="text-[13px]">📦</span>
-        <span className="text-[12px] font-semibold text-gray-900">Evidencia de recepción</span>
+        <span className="text-[13px]">{cfg.icon}</span>
+        <span className="text-[12px] font-semibold text-gray-900">{cfg.title}</span>
+        {doc?.tipo && <span className="ml-auto text-[10px] uppercase tracking-wider text-gray-500">{doc.tipo.replace('_', ' ')}</span>}
       </div>
-      {data.tracking_texto && (
-        <div className="px-4 py-2 border-b border-brain-border text-[12px] text-gray-700">Tracking: <span className="font-mono">{data.tracking_texto}</span></div>
+      {(data.tracking || data.guia) && (
+        <div className="px-4 py-2 border-b border-brain-border text-[12px] text-gray-700">
+          {data.guia ? 'Guía' : 'Tracking'}: <span className="font-mono">{data.guia || data.tracking}</span>
+        </div>
       )}
-      {pl && !pl.error && pl.es_packing_list && (pl.items?.length ?? 0) > 0 && (
+      {items.length > 0 && (
         <div className="px-4 py-2 border-b border-brain-border">
-          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Packing list detectado</p>
-          {pl.items!.map((it, i) => (
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">
+            {modo === 'activar' ? 'Packing list detectado (será la lista de referencia)' : 'Detectado'}
+          </p>
+          {items.map((it, i) => (
             <p key={i} className="text-[12px] text-gray-700">
               • {it.cantidad}× {it.nombre} {it.mfr_part_no ? <span className="text-gray-500 font-mono">({it.mfr_part_no})</span> : null}
             </p>
           ))}
-          {pl.notas && <p className="text-[11px] text-amber-700 mt-1">{pl.notas}</p>}
+          {doc?.notas && <p className="text-[11px] text-amber-700 mt-1">{doc.notas}</p>}
         </div>
       )}
-      {pl && !pl.error && !pl.es_packing_list && (
+      {modo === 'activar' && items.length === 0 && doc && !doc.error && (
         <div className="px-4 py-2 border-b border-brain-border">
           <p className="text-[11px] text-amber-700">
-            No parece un packing list con cantidades legibles{pl.notas ? ` — ${pl.notas}` : ''}. Igual se puede crear la recepción como pendiente.
+            Sin cantidades legibles{doc.notas ? ` — ${doc.notas}` : ''}. Igual se puede activar el receiving; el checklist saldrá del PO.
           </p>
         </div>
       )}
       <div className="px-4 py-2.5 space-y-2">
-        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿A cuál compra corresponde?</p>
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">
+          {modo === 'recepcion' ? '¿A cuál pedido pendiente corresponde?' : '¿A cuál compra corresponde?'}
+        </p>
         {data.sin_match && (
-          <p className="text-[11px] text-amber-700">
-            No pude identificar cuál por el contenido — aquí están las más recientes en tránsito.
-          </p>
+          <p className="text-[11px] text-amber-700">No pude identificarlo solo — elige el correcto.</p>
         )}
-        {candidatos.map((po) => (
-          <label key={po.id} className="flex items-start gap-2 text-[12px] cursor-pointer">
-            <input type="radio" name={`recv-po-${streamId}`} checked={sel === po.id} onChange={() => setSel(po.id)} className="accent-brain-accent mt-0.5" />
-            <div>
-              <p className="text-gray-900">{po.nombre} <span className="text-gray-500">· {po.proveedor}</span></p>
-              {po.so_nombre && (
-                <p className="text-gray-500">Venta: <span className="text-gray-700">{po.so_nombre}</span>{po.so_cliente ? ` · ${po.so_cliente}` : ''}</p>
-              )}
-              <p className="text-gray-500">{(po.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
-            </div>
-          </label>
-        ))}
+        {candidatos.map((po) => {
+          const id = candId(po);
+          return (
+            <label key={id} className="flex items-start gap-2 text-[12px] cursor-pointer">
+              <input type="radio" name={`recv-${modo}-${streamId}`} checked={sel === id} onChange={() => setSel(id)} className="accent-brain-accent mt-0.5" />
+              <div>
+                <p className="text-gray-900">{candNombre(po)} <span className="text-gray-500">· {po.proveedor}</span>
+                  {po.estatus && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded bg-brain-warning-bg text-amber-700">{po.estatus === 'en_transito' ? 'en tránsito' : 'esperando'}</span>}
+                </p>
+                {po.so_nombre && (
+                  <p className="text-gray-500">Venta: <span className="text-gray-700">{po.so_nombre}</span>{po.so_cliente ? ` · ${po.so_cliente}` : ''}</p>
+                )}
+                <p className="text-gray-500">{candLineas(po).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
+              </div>
+            </label>
+          );
+        })}
       </div>
       <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
-        <span className="text-[10px] text-gray-600">
-          {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha creado nada'}
-        </span>
+        <span className="text-[10px] text-gray-600">{estado === 'cancelado' ? 'Cancelado' : cfg.progreso}</span>
         {estado === 'idle' && (
           <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
@@ -1914,7 +1945,121 @@ function ReceivingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: {
         )}
         <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
           className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
-          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Es esta — crear pendiente'}
+          {estado === 'creando' ? '…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : cfg.cta}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Estatus del sub-proceso de receiving (esperando envío / en tránsito), anclado a su PO/SO padre.
+interface ReceivingEstadoData { po_id?: string; po_nombre?: string; proveedor?: string; so_nombre?: string; so_cliente?: string; po_url?: string; so_url?: string; estatus?: string; tracking?: string; packing_list?: { items?: { nombre?: string; mfr_part_no?: string; cantidad?: number }[]; notas?: string } | null; lineas_po?: { name?: string; mfr_part_no?: string; quantity?: string | number }[] }
+function ReceivingEstadoWidget({ data }: { data: ReceivingEstadoData }) {
+  const enTransito = data.estatus === 'en_transito';
+  const ref = data.packing_list?.items || [];
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">{enTransito ? '🚚' : '📦'}</span>
+        <span className="text-[12px] font-semibold text-gray-900">Recepción</span>
+        <span className={`text-[10px] px-1.5 py-0.5 rounded ${enTransito ? 'bg-brain-accent/10 text-brain-accent' : 'bg-brain-warning-bg text-amber-700'}`}>
+          {enTransito ? 'En tránsito' : 'Esperando envío'}
+        </span>
+        {data.po_url && <a href={data.po_url} target="_blank" rel="noreferrer" className="ml-auto text-brain-accent hover:underline text-[12px]">Ver PO →</a>}
+      </div>
+      <div className="px-4 py-2 text-[12px]">
+        <p className="text-gray-900">{data.po_nombre} <span className="text-gray-500">· {data.proveedor}</span></p>
+        {data.so_nombre && <p className="text-gray-500">Venta: <span className="text-gray-700">{data.so_nombre}</span>{data.so_cliente ? ` · ${data.so_cliente}` : ''}</p>}
+        {data.tracking && <p className="text-gray-500">Tracking: <span className="font-mono text-gray-700">{data.tracking}</span></p>}
+      </div>
+      {ref.length > 0 && (
+        <div className="px-4 pb-2.5">
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1">Packing list de referencia</p>
+          {ref.map((it, i) => (
+            <p key={i} className="text-[12px] text-gray-700">• {it.cantidad}× {it.nombre} {it.mfr_part_no ? <span className="text-gray-500 font-mono">({it.mfr_part_no})</span> : null}</p>
+          ))}
+        </div>
+      )}
+      <div className="px-4 py-2 border-t border-brain-border text-[10px] text-gray-500">
+        {enTransito ? 'Cuando llegue el paquete, sube una foto con la guía para recibir.' : 'Cuando el proveedor mande el tracking, lo registro y paso a tránsito.'}
+      </div>
+    </div>
+  );
+}
+
+// Checklist de recepción: marca cada item recibido y su cantidad de ESTA entrega.
+interface ReceivingReclLinea { name?: string; mfr_part_no?: string; cantidad_esperada?: number; cantidad_recibida_previo?: number; cantidad_restante?: number; cantidad_packing?: number | null; cantidad_sugerida?: number; recibido?: boolean }
+interface ReceivingRecepcionData { po_id?: string; guia?: string; estado_anterior?: string; lineas?: ReceivingReclLinea[] }
+function ReceivingRecepcionWidget({ data, streamId, yaConfirmado, onProcesando }: { data: ReceivingRecepcionData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const lineas = data.lineas || [];
+  const [check, setCheck] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    lineas.forEach((l) => { if (l.mfr_part_no) init[l.mfr_part_no] = l.recibido ?? ((l.cantidad_sugerida ?? 0) > 0); });
+    return init;
+  });
+  const [cant, setCant] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    lineas.forEach((l) => { if (l.mfr_part_no) init[l.mfr_part_no] = String(l.cantidad_sugerida ?? l.cantidad_restante ?? 0); });
+    return init;
+  });
+  const [estado, setEstado] = useState<'idle' | 'confirmando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+
+  async function confirmar() {
+    if (!streamId || !data.po_id) return;
+    const cantidades: Record<string, number> = {};
+    lineas.forEach((l) => {
+      if (!l.mfr_part_no || !check[l.mfr_part_no]) return;
+      const v = parseFloat(cant[l.mfr_part_no] || '0');
+      if (v > 0) cantidades[l.mfr_part_no] = v;
+    });
+    setEstado('confirmando');
+    onProcesando?.('📦 Confirmando la recepción y sumando al stock…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Confirmar recepción del paquete', procesado: false,
+      metadata: { receiving_action: 'confirmar_recepcion', po_id: data.po_id, cantidades, estado_anterior: data.estado_anterior || '' },
+    });
+    setEstado('listo');
+  }
+
+  const algoMarcado = lineas.some((l) => l.mfr_part_no && check[l.mfr_part_no]);
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">📬</span>
+        <span className="text-[12px] font-semibold text-gray-900">Recepción del paquete</span>
+        {data.guia && <span className="ml-auto text-[11px] text-gray-500 font-mono">{data.guia}</span>}
+      </div>
+      <div className="px-4 py-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">Marca lo que recibiste y su cantidad</p>
+        {lineas.map((l, i) => {
+          const pn = l.mfr_part_no || '';
+          const on = !!check[pn];
+          return (
+            <div key={i} className="flex items-center gap-2 text-[12px]">
+              <input type="checkbox" disabled={estado !== 'idle'} checked={on}
+                onChange={(e) => setCheck((c) => ({ ...c, [pn]: e.target.checked }))}
+                className="accent-brain-accent" />
+              <div className="flex-1 min-w-0">
+                <p className={on ? 'text-gray-900 truncate' : 'text-gray-500 truncate'}>{l.name}</p>
+                <p className="text-gray-500">
+                  {pn && <span className="font-mono">{pn}</span>}
+                  {' · falta '}{l.cantidad_restante ?? 0} de {l.cantidad_esperada ?? 0}
+                  {(l.cantidad_packing ?? null) !== null && ` · packing ${l.cantidad_packing}`}
+                </p>
+              </div>
+              <input type="number" min={0} disabled={estado !== 'idle' || !on}
+                value={cant[pn] ?? ''}
+                onChange={(e) => setCant((c) => ({ ...c, [pn]: e.target.value }))}
+                className="w-20 bg-white border border-brain-border rounded-md px-2 py-1 text-[12px] text-gray-900 text-right focus:outline-none focus:ring-1 focus:ring-brain-accent disabled:opacity-40" />
+            </div>
+          );
+        })}
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">El PO se cierra solo cuando llegue todo</span>
+        <button onClick={confirmar} disabled={estado !== 'idle' || !algoMarcado}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'confirmando' ? 'Confirmando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar recepción'}
         </button>
       </div>
     </div>
@@ -2316,8 +2461,9 @@ interface MessageBubbleProps {
   yaConfirmadoCierre?: boolean;
   yaConfirmadoReceivingCotejo?: boolean;
   yaConfirmadoReceivingPendiente?: boolean;
+  yaConfirmadoReceivingRecepcion?: boolean;
 }
-function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente }: MessageBubbleProps) {
+function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente, yaConfirmadoReceivingRecepcion }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -2383,6 +2529,10 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const receivingCotejoData: ReceivingCotejoData | null = receivingCotejoRes?.json || null;
   const receivingPendienteRes = extractMarkerJson(rawText, '[RECEIVING_PENDIENTE]');
   const receivingPendienteData: ReceivingPendienteData | null = receivingPendienteRes?.json || null;
+  const receivingEstadoRes = extractMarkerJson(rawText, '[RECEIVING_ESTADO]');
+  const receivingEstadoData: ReceivingEstadoData | null = receivingEstadoRes?.json || null;
+  const receivingRecepcionRes = extractMarkerJson(rawText, '[RECEIVING_RECEPCION]');
+  const receivingRecepcionData: ReceivingRecepcionData | null = receivingRecepcionRes?.json || null;
   const receivingConfirmadoRes = extractMarkerJson(rawText, '[RECEIVING_CONFIRMADO]');
   const receivingConfirmadoData = (receivingConfirmadoRes?.json || null) as { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number> } | null;
   let displayText = rawText
@@ -2408,6 +2558,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (estadoOperativoRes) displayText = displayText.replace(estadoOperativoRes.raw, '').trimEnd();
   if (receivingCotejoRes) displayText = displayText.replace(receivingCotejoRes.raw, '').trimEnd();
   if (receivingPendienteRes) displayText = displayText.replace(receivingPendienteRes.raw, '').trimEnd();
+  if (receivingEstadoRes) displayText = displayText.replace(receivingEstadoRes.raw, '').trimEnd();
+  if (receivingRecepcionRes) displayText = displayText.replace(receivingRecepcionRes.raw, '').trimEnd();
   if (receivingConfirmadoRes) displayText = displayText.replace(receivingConfirmadoRes.raw, '').trimEnd();
 
   function handleDecisionClick(answer: string) {
@@ -2431,6 +2583,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
         {receivingCotejoData && <ReceivingCotejoWidget data={receivingCotejoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingCotejo} onProcesando={onProcesando} />}
         {receivingPendienteData && <ReceivingPendienteWidget data={receivingPendienteData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingPendiente} onProcesando={onProcesando} />}
+        {receivingEstadoData && <ReceivingEstadoWidget data={receivingEstadoData} />}
+        {receivingRecepcionData && <ReceivingRecepcionWidget data={receivingRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingRecepcion} onProcesando={onProcesando} />}
         {receivingConfirmadoData && <ReceivingConfirmadoWidget data={receivingConfirmadoData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {accionDeshechaData && <AccionDeshechaWidget data={accionDeshechaData} />}
         {estadoOperativoData && <EstadoOperativoWidget data={estadoOperativoData} />}
