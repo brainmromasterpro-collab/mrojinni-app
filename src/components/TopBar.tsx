@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 const STREAM_TYPES: { tipo: string; label: string }[] = [
   { tipo: 'generico',    label: 'Genérica' },
   { tipo: 'correo',      label: 'Correo' },
+  { tipo: 'rfq',         label: 'RFQ' },
   { tipo: 'whatsapp',    label: 'WhatsApp' },
   { tipo: 'busquedas',   label: 'Búsquedas' },
   { tipo: 'publicacion', label: 'Publicación' },

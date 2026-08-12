@@ -220,7 +220,7 @@ interface StreamAreaProps {
 
 const FILE_ACCEPT = '.txt,.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,.ogg';
 const TIPO_LABEL: Record<string, string> = {
-  correo: 'Correo', whatsapp: 'WhatsApp', busquedas: 'Búsquedas', publicacion: 'Publicación',
+  correo: 'Correo', rfq: 'RFQ', whatsapp: 'WhatsApp', busquedas: 'Búsquedas', publicacion: 'Publicación',
   cotizacion: 'Cotización', mensajeria: 'Mensajería', catalogo: 'Catálogo',
   ordenes: 'Sales Order', compras: 'Compras', general: 'General', generico: 'General',
 };

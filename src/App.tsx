@@ -1172,6 +1172,28 @@ function AppContent() {
       return;
     }
 
+    // RFQ MANUAL (stream 'rfq'): una imagen/screenshot aquí es un RFQ que el usuario captura a
+    // mano → va al flujo de oportunidad (MODO 15) con visión, NO a publicar catálogo.
+    if (streamTipo === 'rfq' && isImage && !file.url.startsWith('blob:')) {
+      if (userText) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
+          contenido: { text: userText }, created_at: new Date().toISOString(),
+        }]);
+      }
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: '🔎 Leyendo el RFQ de la imagen…', status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || 'Este es un RFQ que subí — léelo de la imagen y arma la oportunidad (MODO 15): valida los 5 datos, pídeme lo que falte o dame la opción de crear con lo que hay.',
+        procesado: false, metadata: { image_url: file.url },
+      });
+      return;
+    }
+
     if (streamTipo === 'ordenes' && isPO && !file.url.startsWith('blob:')) {
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
