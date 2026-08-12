@@ -337,8 +337,10 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
   // Enruta lo seleccionado (drop/paste/picker): una imagen abre el modal de elección
   // (publicar al catálogo vs buscar RFQ); los documentos van directo a handleFilesSelected.
-  // EXCEPCIÓN: en el stream 'compras' una imagen NUNCA es "publicar catálogo" ni "buscar RFQ" —
-  // es comprobante/foto de recepción/factura, así que va directo (el backend decide qué es).
+  // EXCEPCIÓN: en 'compras' y 'rfq' una imagen NUNCA es "publicar catálogo" ni "buscar RFQ" — en
+  // compras es comprobante/recepción/factura, y en rfq es un RFQ que el usuario captura. En ambos
+  // va directo (el backend/flujo decide), sin el modal de intención.
+  const _imgDirecto = stream?.tipo === 'compras' || stream?.tipo === 'rfq';
   function routeSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
@@ -349,7 +351,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       nonImgs.forEach((f) => dt.items.add(f));
       handleFilesSelected(dt.files);
     }
-    if (imgs.length && stream?.tipo === 'compras') {
+    if (imgs.length && _imgDirecto) {
       const dt = new DataTransfer();
       imgs.forEach((f) => dt.items.add(f));
       handleFilesSelected(dt.files);
