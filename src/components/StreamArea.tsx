@@ -172,26 +172,26 @@ interface OportunidadCreadaData {
 }
 function OportunidadCreadaWidget({ data }: { data: OportunidadCreadaData }) {
   const Row = ({ label, value, url }: { label: string; value?: string; url?: string }) => (
-    <div className="flex items-center justify-between gap-3 py-1.5">
+    <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">
         <p className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</p>
-        <p className="text-[12px] text-gray-200 truncate">{value || '—'}</p>
+        <p className="text-[12px] text-gray-900 truncate">{value || '—'}</p>
       </div>
       {url && (
         <a href={url} target="_blank" rel="noreferrer"
-           className="shrink-0 text-[11px] font-medium text-[#7C74E0] hover:text-[#9a93ee] whitespace-nowrap">
+           className="shrink-0 px-2.5 py-1 rounded-md text-[11px] font-medium text-brain-accent border border-brain-border hover:bg-brain-surface transition-colors whitespace-nowrap">
           Ver en CRM ↗
         </a>
       )}
     </div>
   );
   return (
-    <div className="bg-[#1c1c1e] border border-emerald-500/25 rounded-xl overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#2c2c2e] flex items-center gap-2">
+    <div className="bg-white border border-brain-success/30 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
         <span className="text-[13px]">✅</span>
-        <span className="text-[12px] font-semibold text-white">Oportunidad creada{data.empresa ? ` — ${data.empresa}` : ''}</span>
+        <span className="text-[12px] font-semibold text-gray-900">Alta creada{data.empresa ? ` — ${data.empresa}` : ''}</span>
       </div>
-      <div className="px-4 py-2 divide-y divide-[#2a2a2c]">
+      <div className="px-4 py-1 divide-y divide-brain-border">
         <Row label="Oportunidad" value={data.oportunidad} url={data.oportunidad_url} />
         {data.cuenta_url && <Row label="Cuenta" value={data.empresa} url={data.cuenta_url} />}
         {data.contacto_url && <Row label="Contacto" value={data.contacto} url={data.contacto_url} />}
@@ -3096,16 +3096,29 @@ function InfoRow({ label, value, valueColor }: { label: string; value: string; v
 
 function DecisionWidget({ message, onDecision }: { message: Message; onDecision: (messageId: string, approved: boolean) => void }) {
   const contenido = message.contenido as { text?: string; resolved?: boolean; approved?: boolean };
+  // Feedback LOCAL inmediato: al hacer click se marca la decisi\u00f3n al instante (antes de que el
+  // backend responda con resolved) para que el usuario vea que s\u00ed proces\u00f3.
+  const [elegido, setElegido] = useState<null | boolean>(null);
+  const resuelto = contenido.resolved || elegido !== null;
+  const aprobado = contenido.resolved ? !!contenido.approved : elegido === true;
 
-  if (contenido.resolved) {
+  function decidir(ok: boolean) {
+    if (resuelto) return;
+    setElegido(ok);
+    onDecision(message.id, ok);
+  }
+
+  if (resuelto) {
+    const procesando = !contenido.resolved;  // click dado, a\u00fan esperando al backend
     return (
-      <div className={`rounded-xl overflow-hidden border ${contenido.approved ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'}`}>
-        <div className={`px-4 py-3 flex items-center gap-2`}>
-          <span className="text-[14px]">{contenido.approved ? '\u2713' : '\u2717'}</span>
-          <span className={`text-[13px] font-semibold ${contenido.approved ? 'text-emerald-700' : 'text-red-700'}`}>
-            {contenido.approved ? 'Aprobado' : 'Rechazado'}
+      <div className={`rounded-xl overflow-hidden border ${aprobado ? 'border-brain-success/30 bg-brain-success-bg' : 'border-brain-error/40 bg-brain-error-bg'}`}>
+        <div className="px-4 py-3 flex items-center gap-2">
+          <span className="text-[14px]">{aprobado ? '\u2713' : '\u2717'}</span>
+          <span className={`text-[13px] font-semibold ${aprobado ? 'text-brain-success' : 'text-brain-error'}`}>
+            {aprobado ? 'Aprobado' : 'Rechazado'}
           </span>
-          <span className="text-[11px] text-gray-500 ml-2">{contenido.text}</span>
+          {procesando && <span className="text-[11px] text-gray-500">\u00b7 procesando\u2026</span>}
+          <span className="text-[11px] text-gray-500 ml-2 truncate">{contenido.text}</span>
         </div>
       </div>
     );
@@ -3124,13 +3137,13 @@ function DecisionWidget({ message, onDecision }: { message: Message; onDecision:
           {contenido.text || ''}
         </span>
         <button
-          onClick={() => onDecision(message.id, true)}
+          onClick={() => decidir(true)}
           className="px-4 py-1.5 text-[11px] font-semibold text-brain-success border border-brain-success/40 bg-brain-success-bg rounded-lg hover:opacity-80 transition-opacity whitespace-nowrap"
         >
           &#x2713; S&iacute;
         </button>
         <button
-          onClick={() => onDecision(message.id, false)}
+          onClick={() => decidir(false)}
           className="px-4 py-1.5 text-[11px] font-semibold text-brain-error border border-brain-error/40 bg-brain-error-bg rounded-lg hover:opacity-80 transition-opacity whitespace-nowrap"
         >
           &#x2717; No
