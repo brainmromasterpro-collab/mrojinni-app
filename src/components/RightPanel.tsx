@@ -40,6 +40,19 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
     fuentes: [{ icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['1CRM'],
   },
+  compras: {
+    label: 'Compras',
+    agentes: [
+      { key: 'match',      label: 'Match venta ↔ proveedor (PO + cuenta por pagar)' },
+      { key: 'pago',       label: 'Conciliación de pagos' },
+      { key: 'recepcion',  label: 'Recepción y stock' },
+    ],
+    fuentes: [
+      { icon: _DB,    name: '1CRM · PO / Bills / Payments / Productos' },
+      { icon: _GLOBE, name: 'Proveedor (link / eBay via SerpAPI)' },
+    ],
+    conectado: ['1CRM'],
+  },
   whatsapp: {
     label: 'WhatsApp',
     agentes: [
@@ -73,9 +86,10 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
   ordenes: {
     label: 'Sales Order',
     agentes: [
-      { key: 'lector',     label: 'Lector de correo (confirmaciones)' },
-      { key: 'detector',   label: 'Detector de SO' },
+      { key: 'detector',   label: 'Lector de orden del cliente' },
       { key: 'creador_so', label: 'Creador de SO en 1CRM' },
+      { key: 'envio',      label: 'Envío (shipping) y stock' },
+      { key: 'facturacion', label: 'Facturación / cierre de venta' },
       { key: 'seguimiento', label: 'Seguimiento / estatus' },
     ],
     fuentes: [
