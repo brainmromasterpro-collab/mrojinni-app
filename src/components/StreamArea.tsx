@@ -169,6 +169,7 @@ function OportunidadWidget({ data }: { data: OportunidadData }) {
 interface OportunidadCreadaData {
   empresa?: string; oportunidad?: string; oportunidad_url?: string;
   cuenta_url?: string; contacto?: string; contacto_url?: string;
+  duplicado?: boolean;  // true = ya existía en el CRM, no se creó nada (solo se muestra lo registrado)
 }
 function OportunidadCreadaWidget({ data }: { data: OportunidadCreadaData }) {
   const Row = ({ label, value, url }: { label: string; value?: string; url?: string }) => (
@@ -185,11 +186,15 @@ function OportunidadCreadaWidget({ data }: { data: OportunidadCreadaData }) {
       )}
     </div>
   );
+  const dup = !!data.duplicado;
   return (
-    <div className="bg-white border border-brain-success/30 rounded-xl overflow-hidden">
+    <div className={`bg-white border rounded-xl overflow-hidden ${dup ? 'border-brain-warning/40' : 'border-brain-success/30'}`}>
       <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
-        <span className="text-[13px]">✅</span>
-        <span className="text-[12px] font-semibold text-gray-900">Alta creada{data.empresa ? ` — ${data.empresa}` : ''}</span>
+        <span className="text-[13px]">{dup ? '♻️' : '✅'}</span>
+        <span className="text-[12px] font-semibold text-gray-900">
+          {dup ? 'Ya registrado — no dupliqué' : 'Alta creada'}{data.empresa ? ` — ${data.empresa}` : ''}
+        </span>
+        {dup && <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-brain-warning-bg text-amber-700">Duplicado</span>}
       </div>
       <div className="px-4 py-1 divide-y divide-brain-border">
         <Row label="Oportunidad" value={data.oportunidad} url={data.oportunidad_url} />
