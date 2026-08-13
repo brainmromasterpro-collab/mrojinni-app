@@ -1975,7 +1975,7 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
         />
       )}
       <div className="flex flex-1 min-h-0">
-        <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} streams={streams} activeStreamId={activeStreamId} onSelectStream={handleSelectStream} />
+        <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} streams={streams} activeStreamId={activeStreamId} onSelectStream={handleSelectStream} equipo={equipo} />
         {activeNav === 'dashboard' ? (
           <DashboardPanel />
         ) : activeNav === 'activity' ? (

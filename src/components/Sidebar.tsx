@@ -9,6 +9,7 @@ interface SidebarProps {
   streams: Stream[];
   activeStreamId: string | null;
   onSelectStream: (id: string) => void;
+  equipo?: boolean;   // invitado (false) ve solo streams + activity log
 }
 
 // Ícono por tipo de stream (para la lista de streams abiertos en el nav izquierdo).
@@ -46,7 +47,7 @@ function compact(n: number): string {
   return String(Math.round(n));
 }
 
-export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamId, onSelectStream }: SidebarProps) {
+export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamId, onSelectStream, equipo = true }: SidebarProps) {
   const [kpis, setKpis] = useState<KpiTile[]>(PLACEHOLDER_KPIS);
 
   useEffect(() => {
@@ -122,7 +123,8 @@ export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamI
 
   return (
     <aside className="hidden md:flex w-sidebar-l h-full bg-brain-dark border-r border-brain-card flex-col overflow-y-auto scrollbar-thin flex-shrink-0">
-      {/* Dashboard KPIs */}
+      {/* Dashboard KPIs — solo equipo */}
+      {equipo && (
       <div className="px-3 pt-3 pb-1">
         <div className="flex items-center justify-between px-1 pb-2">
           <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest">Dashboard</p>
@@ -150,8 +152,9 @@ export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamI
           ))}
         </div>
       </div>
+      )}
 
-      <Divider />
+      {equipo && <Divider />}
 
       {/* Streams abiertos (mismos que las tabs de arriba) */}
       <NavSection title="Use case - MRO">
@@ -174,14 +177,17 @@ export default function Sidebar({ activeNav, onNavSelect, streams, activeStreamI
         <NavItem icon={Link2} label="Activity log" id="activity" active={activeNav === 'activity'} onClick={onNavSelect} />
       </NavSection>
 
-      <Divider />
-
-      {/* Config */}
-      <NavSection title="Config">
-        <NavItem icon={Plug} label="Connectors" id="connectors" active={activeNav === 'connectors'} onClick={onNavSelect} />
-        <NavItem icon={Bot} label="Agentes" id="agentes" active={activeNav === 'agentes'} onClick={onNavSelect} />
-        <NavItem icon={Cloud} label="Infraestructura" id="infra" active={activeNav === 'infra'} onClick={onNavSelect} />
-      </NavSection>
+      {/* Config — solo equipo */}
+      {equipo && (
+        <>
+          <Divider />
+          <NavSection title="Config">
+            <NavItem icon={Plug} label="Connectors" id="connectors" active={activeNav === 'connectors'} onClick={onNavSelect} />
+            <NavItem icon={Bot} label="Agentes" id="agentes" active={activeNav === 'agentes'} onClick={onNavSelect} />
+            <NavItem icon={Cloud} label="Infraestructura" id="infra" active={activeNav === 'infra'} onClick={onNavSelect} />
+          </NavSection>
+        </>
+      )}
     </aside>
   );
 }
