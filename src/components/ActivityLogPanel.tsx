@@ -12,7 +12,7 @@ interface LogEntry {
   target: string;
   targetSub?: string;
   status: 'success' | 'running' | 'pending' | 'error' | 'warn';
-  category: 'agentes' | 'infra' | 'negocio' | 'sistema';
+  category: 'agentes' | 'infra' | 'negocio' | 'sistema' | 'invitados';
   meta?: Record<string, string>;
 }
 
@@ -72,6 +72,7 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   infra: { label: 'Infra', color: '#f59e0b' },
   negocio: { label: 'Negocio', color: '#10b981' },
   sistema: { label: 'Sistema', color: '#64748b' },
+  invitados: { label: 'Invitados', color: '#7F77DD' },
 };
 
 export default function ActivityLogPanel() {
@@ -86,7 +87,7 @@ export default function ActivityLogPanel() {
   }, []);
 
   async function fetchAll() {
-    const [jobsRes, notifsRes, rfqsRes] = await Promise.all([
+    const [jobsRes, notifsRes, rfqsRes, invRes] = await Promise.all([
       supabase
         .from('jobs')
         .select('id, agente, estado, rfq_id, created_at, started_at, finished_at, error')
@@ -102,6 +103,13 @@ export default function ActivityLogPanel() {
         .select('id, rfq_id, marca, modelo, estado, updated_at, created_at')
         .order('updated_at', { ascending: false })
         .limit(30),
+      // Actividad de INVITADOS externos: mensajes con autor_email (lo pone el trigger de la DB).
+      supabase
+        .from('mensajes')
+        .select('id, stream_id, content, autor_email, created_at')
+        .not('autor_email', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(60),
     ]);
 
     const logEntries: LogEntry[] = [];
@@ -176,6 +184,26 @@ export default function ActivityLogPanel() {
       }
     }
 
+    // INVITADOS externos: excluye a los correos del equipo (solo interesa quién de afuera actúa).
+    const TEAM = new Set(['brain.mromasterpro@gmail.com', 'thejinni.app@gmail.com']);
+    if (invRes.data) {
+      for (const m of invRes.data as { id: string; stream_id: string; content: string; autor_email: string; created_at: string }[]) {
+        if (!m.autor_email || TEAM.has(m.autor_email.toLowerCase())) continue;
+        logEntries.push({
+          id: `inv-${m.id}`,
+          timestamp: m.created_at,
+          type: 'notification',
+          actor: m.autor_email,
+          actorColor: '#7F77DD',
+          action: (m.content || '').slice(0, 80) || 'acción en el stream',
+          target: m.stream_id ? m.stream_id.slice(0, 8) : '',
+          status: 'success',
+          category: 'invitados',
+          meta: { autor: m.autor_email },
+        });
+      }
+    }
+
     logEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     setEntries(logEntries);
     setLoading(false);
@@ -227,6 +255,7 @@ export default function ActivityLogPanel() {
           { key: 'all', label: 'Todos', count: entries.length },
           { key: 'agentes', label: 'Agentes', count: entries.filter(e => e.category === 'agentes').length },
           { key: 'negocio', label: 'Negocio', count: entries.filter(e => e.category === 'negocio').length },
+          { key: 'invitados', label: 'Invitados', count: entries.filter(e => e.category === 'invitados').length },
           { key: 'sistema', label: 'Sistema', count: entries.filter(e => e.category === 'sistema').length },
         ].map(tab => (
           <button
