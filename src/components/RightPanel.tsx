@@ -30,6 +30,16 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
     fuentes: [{ icon: _MAIL, name: 'Gmail · bandeja' }, { icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['Gmail', '1CRM'],
   },
+  rfq: {
+    label: 'RFQ',
+    agentes: [
+      { key: 'lector', label: 'Lector de RFQ (texto / screenshot)' },
+      { key: 'detector', label: 'Cotejo de datos (5 obligatorios)' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + contacto + oportunidad)' },
+    ],
+    fuentes: [{ icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
+    conectado: ['1CRM'],
+  },
   whatsapp: {
     label: 'WhatsApp',
     agentes: [
