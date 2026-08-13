@@ -23,9 +23,11 @@ interface TopBarProps {
   onDeleteStream: (id: string) => void;
   onRenameStream: (id: string, nombre: string) => void;
   onReorderStreams: (from: number, to: number) => void;
+  equipo?: boolean;
+  onShareStream?: (id: string) => void;
 }
 
-export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream, onReorderStreams }: TopBarProps) {
+export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream, onReorderStreams, equipo = true, onShareStream }: TopBarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
@@ -108,33 +110,43 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
         </div>
       ))}
 
-      <div className="relative">
-        <button
-          onClick={() => setShowTypeMenu((v) => !v)}
-          className="px-3 py-1.5 text-[11px] rounded-md border border-dashed border-[#444] text-[#666] hover:text-[#999] hover:border-[#666] transition-colors whitespace-nowrap"
-        >
-          + New Stream
-        </button>
-        {showTypeMenu && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setShowTypeMenu(false)} />
-            <div className="absolute left-0 top-full mt-1 z-50 bg-brain-card border border-brain-border-dark rounded-md py-1 min-w-[150px]">
-              <div className="px-3 py-1 text-[10px] text-[#666] uppercase tracking-wider">Nuevo stream</div>
-              {STREAM_TYPES.map((t) => (
-                <button
-                  key={t.tipo}
-                  onClick={() => { onCreateStream(t.tipo); setShowTypeMenu(false); }}
-                  className="block w-full text-left px-3 py-1.5 text-[11px] text-[#aaa] hover:text-white hover:bg-brain-border-dark transition-colors"
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
+      {equipo && (
+        <div className="relative">
+          <button
+            onClick={() => setShowTypeMenu((v) => !v)}
+            className="px-3 py-1.5 text-[11px] rounded-md border border-dashed border-[#444] text-[#666] hover:text-[#999] hover:border-[#666] transition-colors whitespace-nowrap"
+          >
+            + New Stream
+          </button>
+          {showTypeMenu && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowTypeMenu(false)} />
+              <div className="absolute left-0 top-full mt-1 z-50 bg-brain-card border border-brain-border-dark rounded-md py-1 min-w-[150px]">
+                <div className="px-3 py-1 text-[10px] text-[#666] uppercase tracking-wider">Nuevo stream</div>
+                {STREAM_TYPES.map((t) => (
+                  <button
+                    key={t.tipo}
+                    onClick={() => { onCreateStream(t.tipo); setShowTypeMenu(false); }}
+                    className="block w-full text-left px-3 py-1.5 text-[11px] text-[#aaa] hover:text-white hover:bg-brain-border-dark transition-colors"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="ml-auto flex items-center gap-2">
+        {equipo && activeStreamId && onShareStream && (
+          <button
+            onClick={() => onShareStream(activeStreamId)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 transition-colors whitespace-nowrap"
+          >
+            🔗 Compartir
+          </button>
+        )}
         <NotificationBell />
         <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 transition-colors whitespace-nowrap">
           <RefreshCw className="w-3 h-3" />

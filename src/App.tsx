@@ -10,6 +10,7 @@ import InfraPanel from './components/InfraPanel';
 import DashboardPanel from './components/DashboardPanel';
 import ActivityLogPanel from './components/ActivityLogPanel';
 import LoginPage from './components/LoginPage';
+import ShareModal from './components/ShareModal';
 import { supabase } from './lib/supabase';
 import { loadMessages, persistMessages, loadMessagesFromCache, saveMessagesToCache, clearMessagesCache, deleteStreamMessages } from './lib/storage';
 import { estadoWorkers, despertarWorkers } from './lib/wake';
@@ -102,29 +103,49 @@ export default function App() {
     return () => { cancelado = true; };
   }, [session]);
 
-  if (session === undefined) return (
+  // Acceso: el EQUIPO (ALLOWED_EMAILS) ve todo; un INVITADO entra si tiene ≥1 membresía en
+  // stream_members. Se calcula async tras el login.
+  const [acceso, setAcceso] = useState<{ estado: 'cargando' | 'ok' | 'denegado'; equipo: boolean; streamIds: string[] }>(
+    { estado: 'cargando', equipo: false, streamIds: [] });
+  useEffect(() => {
+    if (session === undefined) return;
+    if (!session) { setAcceso({ estado: 'denegado', equipo: false, streamIds: [] }); return; }
+    const email = session?.user?.email ?? '';
+    if (ALLOWED_EMAILS.has(email)) { setAcceso({ estado: 'ok', equipo: true, streamIds: [] }); return; }
+    let cancel = false;
+    setAcceso((a) => ({ ...a, estado: 'cargando' }));
+    supabase.from('stream_members').select('stream_id').ilike('email', email).then(({ data }) => {
+      if (cancel) return;
+      const ids = (data || []).map((m: { stream_id: string }) => m.stream_id);
+      setAcceso({ estado: ids.length ? 'ok' : 'denegado', equipo: false, streamIds: ids });
+    });
+    return () => { cancel = true; };
+  }, [session]);
+
+  if (session === undefined || (session && acceso.estado === 'cargando')) return (
     <div className="min-h-screen bg-brain-dark flex items-center justify-center">
       <div className="w-6 h-6 border-2 border-brain-accent border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
-  const userEmail = session?.user?.email;
-  if (!session || !ALLOWED_EMAILS.has(userEmail ?? '')) {
-    if (session && !ALLOWED_EMAILS.has(userEmail ?? '')) supabase.auth.signOut();
-    return <LoginPage />;
+  if (!session) return <LoginPage />;
+  if (acceso.estado === 'denegado') {
+    // Logueado pero sin acceso (ni equipo ni invitado a ningún stream).
+    return <LoginPage sinAcceso email={session?.user?.email} onSalir={() => supabase.auth.signOut()} />;
   }
 
   return (
     <>
       {reactivando && <BannerReactivando detalle={reactivando} />}
-      <AppContent />
+      <AppContent equipo={acceso.equipo} streamIdsPermitidos={acceso.streamIds} />
     </>
   );
 }
 
-function AppContent() {
-  const [streams, setStreams] = useState<Stream[]>(demoStreams);
-  const [activeStreamId, setActiveStreamId] = useState<string>(DEMO_STREAM_1);
+function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamIdsPermitidos: string[] }) {
+  const shareParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('share') : null;
+  const [streams, setStreams] = useState<Stream[]>(equipo ? demoStreams : []);
+  const [activeStreamId, setActiveStreamId] = useState<string>(shareParam || (equipo ? DEMO_STREAM_1 : ''));
   const [messages, setMessagesRaw] = useState<Message[]>(demoMessages);
   const [activeNav, setActiveNav] = useState('chat');
   const [activeBulkId, setActiveBulkId] = useState<string | null>(null);
@@ -136,6 +157,7 @@ function AppContent() {
   const confirmedDocsRef = useRef<Set<string>>(new Set());
   const recentSearchesRef = useRef<Map<string, number>>(new Map());
   const [bulkRfqIds, setBulkRfqIds] = useState<Set<string>>(new Set());
+  const [sharingStreamId, setSharingStreamId] = useState<string | null>(null);
 
   // Cargar los streams desde Supabase en el mount. El MAIN (demoStreams[0]) SIEMPRE está y va
   // primero, aunque RLS no lo devuelva para este usuario; los demás (creados por el usuario) van
@@ -143,22 +165,35 @@ function AppContent() {
   useEffect(() => {
     supabase.from('streams').select('id,nombre,tipo,created_at,user_id').order('created_at').then(({ data }) => {
       const db = (data || []) as Stream[];
-      const dbMain = db.find((s) => s.id === MAIN_STREAM.id);
-      const others = db.filter((s) => s.id !== MAIN_STREAM.id);
-      const all = [dbMain || MAIN_STREAM, ...others];
-      // aplicar el orden guardado por el usuario (drag&drop), manteniendo el main primero
-      try {
-        const saved: string[] = JSON.parse(localStorage.getItem('streamOrder') || '[]');
-        if (saved.length) {
-          all.sort((a, b) => {
-            const ia = saved.indexOf(a.id); const ib = saved.indexOf(b.id);
-            return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
-          });
-          const mid = all.findIndex((s) => s.id === MAIN_STREAM.id);
-          if (mid > 0) { const [m] = all.splice(mid, 1); all.unshift(m); }
-        }
-      } catch { /* ignore */ }
+      let all: Stream[];
+      if (equipo) {
+        const dbMain = db.find((s) => s.id === MAIN_STREAM.id);
+        const others = db.filter((s) => s.id !== MAIN_STREAM.id);
+        all = [dbMain || MAIN_STREAM, ...others];
+        // aplicar el orden guardado por el usuario (drag&drop), manteniendo el main primero
+        try {
+          const saved: string[] = JSON.parse(localStorage.getItem('streamOrder') || '[]');
+          if (saved.length) {
+            all.sort((a, b) => {
+              const ia = saved.indexOf(a.id); const ib = saved.indexOf(b.id);
+              return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+            });
+            const mid = all.findIndex((s) => s.id === MAIN_STREAM.id);
+            if (mid > 0) { const [m] = all.splice(mid, 1); all.unshift(m); }
+          }
+        } catch { /* ignore */ }
+      } else {
+        // INVITADO: solo sus streams permitidos (RLS ya los limita en la DB; filtramos por si acaso).
+        const permitidos = new Set(streamIdsPermitidos);
+        all = db.filter((s) => permitidos.has(s.id));
+      }
       setStreams(all);
+      // Fijar el stream activo: el actual si sigue disponible, si no el del ?share, si no el primero.
+      setActiveStreamId((cur) => {
+        if (cur && all.some((s) => s.id === cur)) return cur;
+        if (shareParam && all.some((s) => s.id === shareParam)) return shareParam;
+        return all[0]?.id || '';
+      });
     });
   }, []);
 
@@ -1929,7 +1964,16 @@ function AppContent() {
         onDeleteStream={handleDeleteStream}
         onRenameStream={handleRenameStream}
         onReorderStreams={handleReorderStreams}
+        equipo={equipo}
+        onShareStream={(id) => setSharingStreamId(id)}
       />
+      {sharingStreamId && equipo && (
+        <ShareModal
+          streamId={sharingStreamId}
+          streamNombre={streams.find((s) => s.id === sharingStreamId)?.nombre || 'stream'}
+          onClose={() => setSharingStreamId(null)}
+        />
+      )}
       <div className="flex flex-1 min-h-0">
         <Sidebar activeNav={activeNav} onNavSelect={handleNavSelect} streams={streams} activeStreamId={activeStreamId} onSelectStream={handleSelectStream} />
         {activeNav === 'dashboard' ? (
