@@ -205,6 +205,39 @@ function OportunidadCreadaWidget({ data }: { data: OportunidadCreadaData }) {
   );
 }
 
+// Elección de VARIAS opciones (no Sí/No): un botón por opción. Al elegir, manda esa opción como
+// mensaje del usuario para que el agente actúe directo, sin re-preguntar.
+interface OpcionesData { pregunta?: string; opciones?: string[] }
+function OpcionesWidget({ data, onSendMessage }: { data: OpcionesData; onSendMessage?: (text: string) => void }) {
+  const opciones = data.opciones || [];
+  const [elegido, setElegido] = useState<string | null>(null);
+  function elegir(op: string) {
+    if (elegido) return;
+    setElegido(op);
+    onSendMessage?.(op);
+  }
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="bg-brain-warning-bg px-4 py-2.5 border-b border-[#F0D88A] flex items-center gap-2">
+        <span className="text-[14px]">⚡</span>
+        <span className="text-[13px] font-semibold text-[#7A5000]">{data.pregunta || 'Elige una opción'}</span>
+      </div>
+      <div className="px-4 py-3 flex flex-wrap items-center gap-2">
+        {opciones.map((op, i) => (
+          <button key={i} onClick={() => elegir(op)} disabled={!!elegido}
+            className={`px-3.5 py-1.5 rounded-lg text-[12px] font-medium transition ${
+              elegido === op ? 'bg-brain-accent text-white'
+              : elegido ? 'opacity-40 border border-brain-border text-gray-500'
+              : 'border border-brain-accent/40 text-brain-accent hover:bg-brain-surface'}`}>
+            {op}
+          </button>
+        ))}
+        {elegido && <span className="text-[11px] text-gray-500">· elegiste «{elegido}»</span>}
+      </div>
+    </div>
+  );
+}
+
 interface StreamAreaProps {
   stream: Stream | null;
   messages: Message[];
@@ -2736,6 +2769,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const oportunidadesData: OportunidadesData | null = oportRes?.json || null;
   const oportUnoRes = extractMarkerJson(rawText, '[OPORTUNIDAD]');
   const oportunidadData: OportunidadData | null = oportUnoRes?.json || null;
+  const opcionesRes = extractMarkerJson(rawText, '[OPCIONES]');
+  const opcionesData: OpcionesData | null = opcionesRes?.json || null;
   const oportCreadaRes = extractMarkerJson(rawText, '[OPORTUNIDAD_CREADA]');
   const oportCreadaData: OportunidadCreadaData | null = oportCreadaRes?.json || null;
   const cotejoRes = extractMarkerJson(rawText, '[COTEJO_PO]');
@@ -2785,6 +2820,7 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
     .replace(/\[PRODUCTO_PREVIEW\]\s*\{[\s\S]*?\}/, '')
     .trimEnd();
   if (oportRes) displayText = displayText.replace(oportRes.raw, '').trimEnd();
+  if (opcionesRes) displayText = displayText.replace(opcionesRes.raw, '').trimEnd();
   if (oportCreadaRes) displayText = displayText.replace(oportCreadaRes.raw, '').trimEnd();
   if (productosRes) displayText = displayText.replace(productosRes.raw, '').trimEnd();
   if (correoRes) displayText = displayText.replace(correoRes.raw, '').trimEnd();
@@ -2843,6 +2879,7 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {estadoOperativoData && <EstadoOperativoWidget data={estadoOperativoData} />}
         {oportunidadData && <OportunidadWidget data={oportunidadData} />}
         {oportunidadesData && <OportunidadesWidget data={oportunidadesData} onSendMessage={onSendMessage} />}
+        {opcionesData && <OpcionesWidget data={opcionesData} onSendMessage={onSendMessage} />}
         {oportCreadaData && <OportunidadCreadaWidget data={oportCreadaData} />}
         {productoPreview && (
           <div className="bg-[#1c1c1e] border border-[#2c2c2e] rounded-xl overflow-hidden">
