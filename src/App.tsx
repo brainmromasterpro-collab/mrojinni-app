@@ -27,7 +27,7 @@ const demoStreams: Stream[] = [
   {
     id: DEMO_STREAM_1,
     nombre: 'RFQ · MRO Master',
-    tipo: 'compras',
+    tipo: 'generico',
     created_at: new Date().toISOString(),
     user_id: 'demo',
   },
