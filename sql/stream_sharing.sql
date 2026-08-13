@@ -29,9 +29,10 @@ create table if not exists public.stream_members (
   email      text not null,
   rol        text not null default 'miembro',   -- 'miembro' (interactúa) | 'lector'
   invited_by text,
-  created_at timestamptz default now(),
-  unique (stream_id, lower(email))
+  created_at timestamptz default now()
 );
+-- Unicidad case-insensitive por stream+correo: va como índice (una expresión no cabe en UNIQUE inline).
+create unique index if not exists stream_members_stream_email_uidx on public.stream_members (stream_id, lower(email));
 create index if not exists stream_members_email_idx on public.stream_members (lower(email));
 
 -- 3) HELPERS (SECURITY DEFINER para poder leer team_emails/stream_members bajo RLS) ---
