@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Activity, Bot, Bell, Package, ArrowRight, Clock, CheckCircle2, AlertCircle, XCircle, Loader2, Search, Image as ImageIcon, Send, Eye, RefreshCw } from 'lucide-react';
+import { Activity, Bot, Bell, Package, ArrowRight, Clock, CheckCircle2, AlertCircle, XCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LogEntry {
@@ -75,7 +75,7 @@ const CATEGORY_LABELS: Record<string, { label: string; color: string }> = {
   invitados: { label: 'Invitados', color: '#7F77DD' },
 };
 
-export default function ActivityLogPanel() {
+export default function ActivityLogPanel({ equipo = true }: { equipo?: boolean } = {}) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('all');
@@ -87,6 +87,36 @@ export default function ActivityLogPanel() {
   }, []);
 
   async function fetchAll() {
+    // INVITADO: solo ve la actividad de SUS streams (los mensajes ya están limitados por RLS a sus
+    // streams). NO ve el pipeline global del sistema (jobs/notificaciones/rfqs).
+    if (!equipo) {
+      const { data } = await supabase
+        .from('mensajes')
+        .select('id, stream_id, content, autor_email, role, created_at')
+        .order('created_at', { ascending: false })
+        .limit(80);
+      const logEntries: LogEntry[] = [];
+      for (const m of (data || []) as { id: string; stream_id: string; content: string; autor_email: string | null; role: string; created_at: string }[]) {
+        const esUsuario = m.role === 'user';
+        logEntries.push({
+          id: `msg-${m.id}`,
+          timestamp: m.created_at,
+          type: 'notification',
+          actor: m.autor_email || (esUsuario ? 'usuario' : 'agente'),
+          actorColor: esUsuario ? '#7F77DD' : '#10b981',
+          action: (m.content || '').slice(0, 90) || (esUsuario ? 'acción' : 'respuesta del agente'),
+          target: m.stream_id ? m.stream_id.slice(0, 8) : '',
+          status: 'success',
+          category: 'invitados',
+          meta: {},
+        });
+      }
+      logEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      setEntries(logEntries);
+      setLoading(false);
+      return;
+    }
+
     const [jobsRes, notifsRes, rfqsRes, invRes] = await Promise.all([
       supabase
         .from('jobs')
