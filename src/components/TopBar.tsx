@@ -32,6 +32,7 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
   const [editValue, setEditValue] = useState('');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const dragIndex = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -100,7 +101,7 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
           )}
           {streams.length > 1 && editingId !== s.id && (
             <button
-              onClick={(e) => { e.stopPropagation(); onDeleteStream(s.id); }}
+              onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(s.id); }}
               className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 rounded hover:text-red-400 text-[#888]"
               title="Cerrar stream"
             >
@@ -160,6 +161,40 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
           <LogOut className="w-3 h-3" />
         </button>
       </div>
+
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmDeleteId(null)}>
+          <div className="bg-white rounded-xl border border-brain-border w-full max-w-sm shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-brain-border flex items-center gap-2">
+              <span className="text-[13px]">⚠️</span>
+              <span className="text-[13px] font-semibold text-gray-900">
+                ¿Cerrar «{streams.find((s) => s.id === confirmDeleteId)?.nombre}»?
+              </span>
+            </div>
+            <div className="px-4 py-3">
+              <p className="text-[12px] text-gray-600 leading-relaxed">
+                Esta acción no se puede deshacer desde la interfaz — el stream desaparece de tus
+                tabs y perderías el acceso a esta conversación a menos que alguien lo recupere
+                manualmente desde la base de datos. ¿Estás seguro?
+              </p>
+            </div>
+            <div className="px-4 py-3 border-t border-brain-border flex items-center justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 hover:bg-brain-surface transition"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { onDeleteStream(confirmDeleteId); setConfirmDeleteId(null); }}
+                className="px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-error text-white hover:brightness-110 transition"
+              >
+                Sí, cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
