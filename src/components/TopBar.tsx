@@ -164,32 +164,34 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
 
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setConfirmDeleteId(null)}>
-          <div className="bg-white rounded-xl border border-brain-border w-full max-w-sm shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-brain-border flex items-center gap-2">
-              <span className="text-[13px]">⚠️</span>
-              <span className="text-[13px] font-semibold text-gray-900">
-                ¿Cerrar «{streams.find((s) => s.id === confirmDeleteId)?.nombre}»?
-              </span>
+          <div className="bg-white rounded-xl border border-brain-border w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-brain-warning-bg px-4 py-2.5 border-b border-[#F0D88A]">
+              <div className="flex items-center gap-2">
+                <span className="text-[14px]">⚡</span>
+                <span className="text-[13px] font-semibold text-[#7A5000]">
+                  ¿Cerrar «{streams.find((s) => s.id === confirmDeleteId)?.nombre}»?
+                </span>
+              </div>
             </div>
-            <div className="px-4 py-3">
-              <p className="text-[12px] text-gray-600 leading-relaxed">
+            <div className="px-4 py-4">
+              <p className="text-[12px] text-gray-700 leading-relaxed">
                 Esta acción no se puede deshacer desde la interfaz — el stream desaparece de tus
                 tabs y perderías el acceso a esta conversación a menos que alguien lo recupere
-                manualmente desde la base de datos. ¿Estás seguro?
+                manualmente desde la base de datos.
               </p>
             </div>
-            <div className="px-4 py-3 border-t border-brain-border flex items-center justify-end gap-2">
-              <button
-                onClick={() => setConfirmDeleteId(null)}
-                className="px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 hover:bg-brain-surface transition"
-              >
-                Cancelar
-              </button>
+            <div className="px-4 pb-4 flex items-center gap-2">
               <button
                 onClick={() => { onDeleteStream(confirmDeleteId); setConfirmDeleteId(null); }}
-                className="px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-error text-white hover:brightness-110 transition"
+                className="px-4 py-1.5 text-[11px] font-semibold text-brain-error border border-brain-error/40 bg-brain-error-bg rounded-lg hover:opacity-80 transition-opacity whitespace-nowrap"
               >
-                Sí, cerrar
+                ✗ Sí, cerrar
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="px-4 py-1.5 text-[11px] font-semibold text-gray-600 border border-brain-border rounded-lg hover:bg-brain-surface transition-colors whitespace-nowrap"
+              >
+                Cancelar
               </button>
             </div>
           </div>
