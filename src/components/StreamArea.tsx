@@ -244,7 +244,7 @@ interface StreamAreaProps {
   bulkRfqIds: Set<string>;
   onActiveBulkIdChange: (id: string | null) => void;
   onSendMessage: (text: string) => void;
-  onFileUploaded: (file: { name: string; type: string; size: number; url: string }, userText?: string, intent?: 'publish' | 'quote') => void;
+  onFileUploaded: (file: { name: string; type: string; size: number; url: string } | { name: string; type: string; size: number; url: string }[], userText?: string, intent?: 'publish' | 'quote') => void;
   onProcesando?: (text: string) => void;
   onDecision: (messageId: string, approved: boolean) => void;
   onImagenDecision: (rfqId: string, approved: boolean) => Promise<void>;
@@ -382,6 +382,14 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
   function routeSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
+    // RFQ: imágenes Y documentos (PDF) van TODOS juntos a handleFilesSelected — ahí se agrupan en
+    // un solo mensaje con visión, en vez de separarse por tipo como en el resto de streams.
+    if (stream?.tipo === 'rfq') {
+      const dt = new DataTransfer();
+      arr.forEach((f) => dt.items.add(f));
+      handleFilesSelected(dt.files);
+      return;
+    }
     const imgs = arr.filter((f) => f.type.startsWith('image/'));
     const nonImgs = arr.filter((f) => !f.type.startsWith('image/'));
     if (nonImgs.length) {
@@ -400,10 +408,16 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
   async function handleFilesSelected(files: FileList | null, imageIntent?: 'publish' | 'quote') {
     if (!files || !stream) return;
+    const esRfq = stream.tipo === 'rfq';
+    // RFQ: imágenes y PDFs se agrupan aquí y se mandan en UN solo mensaje (mismo contexto de
+    // visión) en vez de un mensaje por archivo. Word/Excel siguen el flujo viejo de un archivo a
+    // la vez (Claude no los lee como bloque de visión/documento, solo PDF e imágenes).
+    const rfqBatch: { name: string; type: string; size: number; url: string }[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const safeName = sanitizeFilename(file.name);
       const isImage = file.type.startsWith('image/');
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
       const isDocument = /\.(docx?|xlsx?)$/i.test(file.name) || /word|spreadsheet|excel/i.test(file.type);
       const bucket = isImage ? 'product-images' : 'rfq-files';
       const path = `${stream.id}/${Date.now()}-${safeName}`;
@@ -441,13 +455,18 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
       const fileObj = { name: file.name, type: file.type, size: file.size, url: url || URL.createObjectURL(file) };
 
-      if (isDocument) {
+      if (esRfq && (isImage || isPdf)) {
+        rfqBatch.push(fileObj);
+      } else if (isDocument) {
         // Queue as pending — user types intent before sending
         setPendingFile(fileObj);
         setPendingFileUploading(false);
       } else {
         onFileUploaded(fileObj, undefined, imageIntent);
       }
+    }
+    if (rfqBatch.length) {
+      onFileUploaded(rfqBatch.length === 1 ? rfqBatch[0] : rfqBatch, undefined, imageIntent);
     }
   }
 

@@ -1167,8 +1167,48 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
   }
 
 
-  const handleFileUploaded = useCallback(async (file: { name: string; type: string; size: number; url: string }, userText?: string, intent?: 'publish' | 'quote') => {
+  const handleFileUploaded = useCallback(async (fileOrFiles: { name: string; type: string; size: number; url: string } | { name: string; type: string; size: number; url: string }[], userText?: string, intent?: 'publish' | 'quote') => {
     if (!activeStreamId) return;
+
+    // RFQ: varios screenshots/PDFs subidos juntos → UN solo mensaje con todos los adjuntos, para
+    // que el modelo los lea en el mismo turno de visión (en vez de N mensajes separados).
+    if (Array.isArray(fileOrFiles)) {
+      const files = fileOrFiles;
+      if (files.length === 0) return;
+      setMessages((prev) => [
+        ...prev,
+        ...files.map((f) => ({
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user' as const, tipo: 'file-upload',
+          contenido: f, created_at: new Date().toISOString(),
+        })),
+      ]);
+      files.forEach((f) => pushLog(`Archivo subido: ${f.name}`));
+      if (userText) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'user', tipo: 'text',
+          contenido: { text: userText }, created_at: new Date().toISOString(),
+        }]);
+      }
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: `🔎 Leyendo ${files.length} archivos del RFQ…`, status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      const attachments = files.map((f) => ({
+        url: f.url,
+        tipo: (f.type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(f.name)) ? 'image' : 'document',
+        mime: f.type,
+        nombre: f.name,
+      }));
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || `Este es un RFQ que subí (${files.length} archivos) — léelos todos juntos y arma la oportunidad (MODO 15): valida los 5 datos, pídeme lo que falte o dame la opción de crear con lo que hay.`,
+        procesado: false, metadata: { attachments },
+      });
+      return;
+    }
+
+    const file = fileOrFiles;
     const fileMsg: Message = {
       id: crypto.randomUUID(),
       stream_id: activeStreamId,
@@ -1979,7 +2019,7 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
         {activeNav === 'dashboard' ? (
           <DashboardPanel />
         ) : activeNav === 'activity' ? (
-          <ActivityLogPanel />
+          <ActivityLogPanel equipo={equipo} />
         ) : activeNav === 'connectors' ? (
           <ConnectorsPanel />
         ) : activeNav === 'agentes' ? (
