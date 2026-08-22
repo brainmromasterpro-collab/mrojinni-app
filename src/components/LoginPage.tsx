@@ -11,8 +11,11 @@ export default function LoginPage({ sinAcceso, email, onSalir }: { sinAcceso?: b
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // Preserva el ?share=... para volver al stream compartido tras el OAuth.
-        redirectTo: window.location.href,
+        // Preserva el ?share=... para volver al stream compartido tras el OAuth, pero corta
+        // cualquier fragmento #... que ya traiga la URL — Supabase le pega su propio
+        // #access_token=... al final, y un # sobrante aquí produce un doble ## que rompe el
+        // parseo del token (bug real: causó un loop de login infinito, ver [[project-stream-sharing]]).
+        redirectTo: window.location.href.split('#')[0],
       },
     });
     if (error) {
