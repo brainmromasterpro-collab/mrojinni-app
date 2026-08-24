@@ -53,6 +53,15 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
     ],
     conectado: ['1CRM'],
   },
+  pagos: {
+    label: 'Pagos',
+    agentes: [
+      { key: 'cotejo',  label: 'Cotejo de comprobante (Bills + Invoices)' },
+      { key: 'sinmatch', label: 'Alta guiada de PO/SO sin match' },
+    ],
+    fuentes: [{ icon: _DB, name: '1CRM · Bills / Invoices / Payments' }],
+    conectado: ['1CRM'],
+  },
   whatsapp: {
     label: 'WhatsApp',
     agentes: [

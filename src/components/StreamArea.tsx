@@ -260,7 +260,7 @@ const FILE_ACCEPT = '.txt,.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,
 const TIPO_LABEL: Record<string, string> = {
   correo: 'Correo', rfq: 'RFQ', whatsapp: 'WhatsApp', busquedas: 'Búsquedas', publicacion: 'Publicación',
   cotizacion: 'Cotización', mensajeria: 'Mensajería', catalogo: 'Catálogo',
-  ordenes: 'Sales Order', compras: 'Compras', general: 'General', generico: 'General',
+  ordenes: 'Sales Order', compras: 'Compras', pagos: 'Pagos', general: 'General', generico: 'General',
 };
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
@@ -375,10 +375,11 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
 
   // Enruta lo seleccionado (drop/paste/picker): una imagen abre el modal de elección
   // (publicar al catálogo vs buscar RFQ); los documentos van directo a handleFilesSelected.
-  // EXCEPCIÓN: en 'compras' y 'rfq' una imagen NUNCA es "publicar catálogo" ni "buscar RFQ" — en
-  // compras es comprobante/recepción/factura, y en rfq es un RFQ que el usuario captura. En ambos
-  // va directo (el backend/flujo decide), sin el modal de intención.
-  const _imgDirecto = stream?.tipo === 'compras' || stream?.tipo === 'rfq';
+  // EXCEPCIÓN: en 'compras', 'rfq' y 'pagos' una imagen NUNCA es "publicar catálogo" ni "buscar
+  // RFQ" — en compras es comprobante/recepción/factura, en rfq es un RFQ que el usuario captura,
+  // y en pagos es SIEMPRE un comprobante de pago. En los tres va directo (el backend/flujo
+  // decide), sin el modal de intención.
+  const _imgDirecto = stream?.tipo === 'compras' || stream?.tipo === 'rfq' || stream?.tipo === 'pagos';
   function routeSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
@@ -1635,7 +1636,7 @@ function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?:
 // ─────────────────────────────────────────────────────────────
 // ETAPA 2 — PAGOS: comprobante leído → elegir la Bill correcta → registrar Payment
 // ─────────────────────────────────────────────────────────────
-interface BillCandidata { id: string; nombre: string; amount_due: number; currency_id?: string; proveedor?: string; url?: string }
+interface BillCandidata { id: string; tipo?: 'bill' | 'invoice'; direccion?: 'outgoing' | 'incoming'; nombre: string; amount_due: number; currency_id?: string; cuenta?: string; proveedor?: string; url?: string; completo?: boolean }
 interface CotejoPagoData {
   comprobante?: { monto?: number | null; moneda?: string; fecha?: string; referencia?: string; notas?: string; error?: string };
   cotejo?: { candidatas?: BillCandidata[]; multiples?: boolean; por_monto?: boolean };
@@ -1643,9 +1644,11 @@ interface CotejoPagoData {
 function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data: CotejoPagoData; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
   const comp = data.comprobante || {};
   const cands = data.cotejo?.candidatas || [];
+  const sinMatch = data.cotejo?.por_monto === false;
   const [sel, setSel] = useState<string>(cands.length === 1 ? cands[0].id : '');
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | null) => (n === null || n === undefined) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  const seleccionada = cands.find((c) => c.id === sel);
 
   async function confirmar() {
     if (!sel || !streamId) return;
@@ -1653,7 +1656,7 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
     onProcesando?.('🧾 Registrando el pago… Te aviso al terminar.');
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Registrar pago', procesado: false,
-      metadata: { pago_action: 'confirmar', bill_id: sel, monto: comp.monto, datos_comprobante: comp },
+      metadata: { pago_action: 'confirmar', tipo: seleccionada?.tipo || 'bill', registro_id: sel, monto: comp.monto, datos_comprobante: comp },
     });
     setEstado('listo');
   }
@@ -1664,6 +1667,17 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Cancelar — ninguna coincide', procesado: false,
       metadata: { cancelar_accion: true },
+    });
+  }
+
+  async function iniciarRegistro(direccion: 'outgoing' | 'incoming') {
+    if (!streamId) return;
+    setEstado('cancelado'); // ya no aplica el cotejo de este widget — la conversación sigue por texto
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user',
+      content: direccion === 'outgoing' ? 'Registrar como compra nueva a proveedor' : 'Registrar como cobro de un cliente nuevo',
+      procesado: false,
+      metadata: { pago_action: 'iniciar_registro', direccion, monto: comp.monto, datos_comprobante: comp },
     });
   }
 
@@ -1684,21 +1698,41 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
         </div>
       )}
       <div className="px-4 py-2.5 space-y-1.5">
-        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿A cuál cuenta por pagar corresponde?</p>
-        {cands.length === 0 && <p className="text-[12px] text-gray-500">No hay cuentas por pagar abiertas.</p>}
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">
+          {sinMatch ? 'Sin match exacto por monto — elige una manualmente, o registra como algo nuevo' : '¿A cuál cuenta corresponde?'}
+        </p>
+        {cands.length === 0 && <p className="text-[12px] text-gray-500">No hay cuentas abiertas.</p>}
         {cands.map((b) => (
           <label key={b.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
             <input type="radio" name={`bill-${streamId}`} checked={sel === b.id} onChange={() => setSel(b.id)} className="accent-brain-accent" />
+            <span className={`text-[9px] px-1.5 py-0.5 rounded ${b.tipo === 'invoice' ? 'bg-brain-success-bg text-brain-success' : 'bg-brain-warning-bg text-amber-700'}`}>
+              {b.tipo === 'invoice' ? 'Cobro de cliente' : 'Pago a proveedor'}
+            </span>
             <span className="text-gray-900">{b.nombre}</span>
-            <span className="text-gray-500">{b.proveedor}</span>
+            <span className="text-gray-500">{b.cuenta || b.proveedor}</span>
             <span className="ml-auto text-gray-600">{money(b.amount_due)} pendiente</span>
+            {typeof comp.monto === 'number' && (
+              <span className={`text-[10px] ${b.completo ? 'text-brain-success' : 'text-amber-700'}`}>
+                {b.completo ? 'cubre el total' : `parcial — quedan ${money(b.amount_due - comp.monto)}`}
+              </span>
+            )}
           </label>
         ))}
       </div>
-      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2 flex-wrap">
         <span className="text-[10px] text-gray-600">
           {estado === 'cancelado' ? 'Cancelado' : 'Previo · no se ha registrado nada'}
         </span>
+        {estado === 'idle' && sinMatch && (
+          <>
+            <button onClick={() => iniciarRegistro('outgoing')} className="px-3 py-1.5 rounded-md text-[11px] font-medium text-amber-700 border border-brain-warning/40 bg-brain-warning-bg hover:opacity-80 transition-opacity">
+              Es compra nueva a proveedor
+            </button>
+            <button onClick={() => iniciarRegistro('incoming')} className="px-3 py-1.5 rounded-md text-[11px] font-medium text-brain-success border border-brain-success/40 bg-brain-success-bg hover:opacity-80 transition-opacity">
+              Es cobro de cliente nuevo
+            </button>
+          </>
+        )}
         {estado === 'idle' && (
           <button onClick={cancelar} className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-600 border border-brain-border hover:text-gray-900 hover:border-gray-300 transition">
             Ninguna coincide
@@ -1713,7 +1747,7 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
   );
 }
 
-function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; payment_id?: string; payment_url?: string; bill_url?: string; monto?: number; aviso?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
+function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; payment_id?: string; payment_url?: string; tipo?: 'bill' | 'invoice'; registro_url?: string; bill_url?: string; monto?: number; aviso?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
     if (!streamId) return;
@@ -1736,7 +1770,11 @@ function PagoRegistradoWidget({ data, streamId, onProcesando }: { data: { ok?: b
           <>
             <div className="flex items-center gap-3">
               {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Payment →</a>}
-              {data.bill_url && <a href={data.bill_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Cuenta por pagar →</a>}
+              {(data.registro_url || data.bill_url) && (
+                <a href={data.registro_url || data.bill_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">
+                  {data.tipo === 'invoice' ? 'Cuenta por cobrar →' : 'Cuenta por pagar →'}
+                </a>
+              )}
               {deshecho ? <span className="ml-auto text-[11px] text-gray-500">Deshecho</span> :
                 <button onClick={deshacer} className="ml-auto text-[11px] text-brain-error hover:text-brain-error">Deshacer</button>}
             </div>

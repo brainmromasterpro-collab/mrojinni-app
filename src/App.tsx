@@ -1247,6 +1247,23 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
       return;
     }
 
+    // PAGOS (stream 'pagos'): cualquier imagen/PDF aquí es un comprobante de pago directo — no
+    // hace falta distinguir de qué se trata como en 'compras', todo en este stream es un pago.
+    if (streamTipo === 'pagos' && (isImage || /\.pdf$/i.test(file.name) || file.type === 'application/pdf') && !file.url.startsWith('blob:')) {
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: `🔎 Leyendo comprobante «${file.name}»…`, status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText || `Comprobante de pago subido: ${file.name}`,
+        procesado: false,
+        metadata: { file_url: file.url, file_name: file.name, file_mime: file.type },
+      });
+      return;
+    }
+
     // RFQ MANUAL (stream 'rfq'): una imagen/screenshot aquí es un RFQ que el usuario captura a
     // mano → va al flujo de oportunidad (MODO 15) con visión, NO a publicar catálogo.
     if (streamTipo === 'rfq' && isImage && !file.url.startsWith('blob:')) {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3, Mail, MessageCircle, Search, FileText, ClipboardList, MessagesSquare, ShoppingCart } from 'lucide-react';
+import { Package, FolderOpen, Link2, Plug, Bot, Cloud, BarChart3, Mail, MessageCircle, Search, FileText, ClipboardList, MessagesSquare, ShoppingCart, DollarSign } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { Stream } from '../lib/types';
 
@@ -16,7 +16,7 @@ interface SidebarProps {
 const TIPO_ICON: Record<string, React.ElementType> = {
   correo: Mail, rfq: FileText, whatsapp: MessageCircle, busquedas: Search, publicacion: Package,
   cotizacion: FileText, catalogo: FolderOpen, ordenes: ClipboardList, mensajeria: Mail, sales_order: ClipboardList,
-  compras: ShoppingCart,
+  compras: ShoppingCart, pagos: DollarSign,
 };
 
 interface KpiTile {

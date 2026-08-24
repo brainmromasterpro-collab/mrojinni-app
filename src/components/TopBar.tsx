@@ -13,6 +13,7 @@ const STREAM_TYPES: { tipo: string; label: string }[] = [
   { tipo: 'cotizacion',  label: 'Cotización' },
   { tipo: 'ordenes',     label: 'Sales Order' },
   { tipo: 'compras',     label: 'Compras' },
+  { tipo: 'pagos',       label: 'Pagos' },
 ];
 
 interface TopBarProps {
