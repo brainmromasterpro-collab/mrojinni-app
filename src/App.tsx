@@ -1308,8 +1308,37 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
     // caía por TODAS las ramas sin mandar nada al backend. Se manda como link en el texto para que
     // el modelo lo lea con extraer_ficha_pdf (MODO 14), igual que si el usuario hubiera pegado la URL.
     if ((streamTipo === 'publicacion' || streamTipo === 'catalogo')
-        && (/\.pdf$/i.test(file.name) || file.type === 'application/pdf')
-        && !file.url.startsWith('blob:')) {
+        && (/\.pdf$/i.test(file.name) || file.type === 'application/pdf')) {
+      let pdfUrl = file.url;
+      // Si la subida a Storage falló arriba (handleFilesSelected) solo queda un blob: local —
+      // antes esto hacía que la rama de arriba (!file.url.startsWith('blob:')) nunca corriera Y
+      // ninguna otra rama del switch cubre PDF, así que el archivo se perdía en silencio ("no hace
+      // nada", sin log ni error). Reintenta la subida (mismo patrón que ya existe para imágenes) y,
+      // si de plano no se puede, avisa en vez de quedarse callado.
+      if (pdfUrl.startsWith('blob:')) {
+        try {
+          const blobResp = await fetch(pdfUrl);
+          const blob = await blobResp.blob();
+          const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
+          const path = `${activeStreamId}/${Date.now()}-${safeName}`;
+          const { data: reupData, error: reupErr } = await supabase.storage
+            .from('rfq-files')
+            .upload(path, blob, { contentType: file.type || 'application/pdf' });
+          if (!reupErr && reupData) {
+            const { data: urlData } = supabase.storage.from('rfq-files').getPublicUrl(reupData.path);
+            pdfUrl = urlData.publicUrl;
+          }
+        } catch { /* reintento falló, pdfUrl sigue en blob: */ }
+      }
+      if (pdfUrl.startsWith('blob:')) {
+        setMessages((prev) => [...prev, {
+          id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'text',
+          contenido: { text: `Error al subir "${file.name}" al servidor. Intenta de nuevo o verifica tu conexión.` },
+          created_at: new Date().toISOString(),
+        }]);
+        pushLog(`Error subiendo archivo: ${file.name}`, 'error');
+        return;
+      }
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
         contenido: { text: `📄 Leyendo la ficha técnica «${file.name}»…`, status: 'querying', procesando: true },
@@ -1318,10 +1347,10 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
       await supabase.from('mensajes').insert({
         stream_id: activeStreamId, role: 'user',
         content: userText
-          ? `${userText}\n\nFicha técnica (PDF): ${file.url}`
-          : `Aquí está la ficha técnica del producto (PDF) que quiero publicar: ${file.url}`,
+          ? `${userText}\n\nFicha técnica (PDF): ${pdfUrl}`
+          : `Aquí está la ficha técnica del producto (PDF): ${pdfUrl}`,
         procesado: false,
-        metadata: { file_url: file.url, file_name: file.name, file_mime: file.type },
+        metadata: { file_url: pdfUrl, file_name: file.name, file_mime: file.type },
       });
       return;
     }
