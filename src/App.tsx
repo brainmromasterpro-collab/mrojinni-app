@@ -1301,6 +1301,31 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
       return;
     }
 
+    // PUBLICACIÓN (stream 'publicacion'/'catalogo'): un PDF aquí es la ficha técnica de un producto
+    // para publicar en 1CRM. isDocument (abajo) NO cubre PDF — solo docx/xlsx vía la función vieja
+    // extract-from-document, que no sabe parsear PDF (sin librería) y devolvía "Unsupported file
+    // type" en silencio, o ni siquiera eso: al no matchear isImage/isDocument/isText/isPO, el PDF
+    // caía por TODAS las ramas sin mandar nada al backend. Se manda como link en el texto para que
+    // el modelo lo lea con extraer_ficha_pdf (MODO 14), igual que si el usuario hubiera pegado la URL.
+    if ((streamTipo === 'publicacion' || streamTipo === 'catalogo')
+        && (/\.pdf$/i.test(file.name) || file.type === 'application/pdf')
+        && !file.url.startsWith('blob:')) {
+      setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
+        id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
+        contenido: { text: `📄 Leyendo la ficha técnica «${file.name}»…`, status: 'querying', procesando: true },
+        created_at: new Date().toISOString(),
+      }]);
+      await supabase.from('mensajes').insert({
+        stream_id: activeStreamId, role: 'user',
+        content: userText
+          ? `${userText}\n\nFicha técnica (PDF): ${file.url}`
+          : `Aquí está la ficha técnica del producto (PDF) que quiero publicar: ${file.url}`,
+        procesado: false,
+        metadata: { file_url: file.url, file_name: file.name, file_mime: file.type },
+      });
+      return;
+    }
+
     // .txt con links → leer el contenido y mandarlo al chat como mensaje: el modelo detecta los
     // links y corre el flujo de publicar (uno o varios → bulk). No requiere dependencias nuevas.
     if (isText) {
