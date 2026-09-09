@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Upload, Link, FileText, X } from 'lucide-react';
+import { Plus, Upload, Link, FileText, X, HelpCircle, ChevronDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface RightPanelProps {
@@ -8,11 +8,17 @@ interface RightPanelProps {
   tipo?: string;
 }
 
-// Config del panel por tipo de stream: qué agentes, fuentes y conexiones mostrar.
-// Un tipo no listado (generico/compras/general) usa el panel legacy (derivado de jobs).
+// Config del panel por tipo de stream: qué hace el stream, qué agentes tiene (con descripción de
+// cada uno), fuentes y conexiones a mostrar. 'queHago' y 'agentes[].desc' alimentan el botón
+// "¿Qué hago?" (documentación auto-explicativa del stream) — pensado tanto para el usuario humano
+// como para otras IAs que en el futuro coordinen/orquesten varios streams y necesiten saber, sin
+// adivinar, qué hace cada uno. Un tipo no listado (generico/compras/general) usa el panel legacy
+// (agentes derivados de jobs) más una explicación genérica del stream libre.
+interface AgenteConfig { key: string; label: string; desc: string; }
 interface TipoConfig {
   label: string;
-  agentes: { key: string; label: string }[];
+  queHago: string;
+  agentes: AgenteConfig[];
   fuentes: { icon: string; name: string }[];
   conectado: string[];
 }
@@ -20,32 +26,35 @@ const _LINK = '\u{1F517}', _GLOBE = '\u{1F310}', _MAIL = '✉', _CHAT = '\u{1F4A
 const TIPO_CONFIG: Record<string, TipoConfig> = {
   correo: {
     label: 'Correo',
+    queHago: 'Lee los correos entrantes de Gmail buscando solicitudes de cotización (RFQ). Cuando detecta una, busca los productos pedidos, cotiza contra proveedores y crea la oportunidad en 1CRM — o te avisa qué falta si el correo viene incompleto.',
     agentes: [
-      { key: 'lector', label: 'Lector de correo' },
-      { key: 'detector', label: 'Detector de oportunidad' },
-      { key: 'buscador', label: 'Buscador RFQ (interno + web)' },
-      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)' },
-      { key: 'seguimiento', label: 'Seguimiento' },
+      { key: 'lector', label: 'Lector de correo', desc: 'Lee el contenido de los correos que llegan a la bandeja.' },
+      { key: 'detector', label: 'Detector de oportunidad', desc: 'Decide si un correo es una oportunidad de venta real (RFQ) o no.' },
+      { key: 'buscador', label: 'Buscador RFQ (interno + web)', desc: 'Busca los productos solicitados en el catálogo propio y en proveedores externos.' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)', desc: 'Crea la cuenta, el contacto y la oportunidad en 1CRM cuando ya hay datos suficientes.' },
+      { key: 'seguimiento', label: 'Seguimiento', desc: 'Da seguimiento a oportunidades que quedaron incompletas o sin respuesta.' },
     ],
     fuentes: [{ icon: _MAIL, name: 'Gmail · bandeja' }, { icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['Gmail', '1CRM'],
   },
   rfq: {
     label: 'RFQ',
+    queHago: 'Para cuando TÚ le compartes un RFQ directamente (texto o captura de pantalla), sin que venga de un correo. Valida que estén los datos obligatorios y crea la oportunidad en 1CRM.',
     agentes: [
-      { key: 'lector', label: 'Lector de RFQ (texto / screenshot)' },
-      { key: 'detector', label: 'Cotejo de datos (5 obligatorios)' },
-      { key: 'alta', label: 'Alta en CRM (cuenta + contacto + oportunidad)' },
+      { key: 'lector', label: 'Lector de RFQ (texto / screenshot)', desc: 'Lee el RFQ que subes como texto o imagen.' },
+      { key: 'detector', label: 'Cotejo de datos (5 obligatorios)', desc: 'Revisa que estén los 5 datos obligatorios (producto, cantidad, cliente, etc.) antes de crear la oportunidad.' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + contacto + oportunidad)', desc: 'Crea cuenta, contacto y oportunidad en 1CRM con los datos ya validados.' },
     ],
     fuentes: [{ icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['1CRM'],
   },
   compras: {
     label: 'Compras',
+    queHago: 'Ciclo completo de compra a proveedor: desde comprar un producto vía un link o eBay hasta registrar el pago, la recepción de mercancía y el cierre de la venta al cliente final.',
     agentes: [
-      { key: 'match',      label: 'Match venta ↔ proveedor (PO + cuenta por pagar)' },
-      { key: 'pago',       label: 'Conciliación de pagos' },
-      { key: 'recepcion',  label: 'Recepción y stock' },
+      { key: 'match',      label: 'Match venta ↔ proveedor (PO + cuenta por pagar)', desc: 'Crea la orden de compra (PO) y la cuenta por pagar (Bill) a partir del link del proveedor.' },
+      { key: 'pago',       label: 'Conciliación de pagos', desc: 'Lee comprobantes de pago y los concilia contra las cuentas por pagar abiertas.' },
+      { key: 'recepcion',  label: 'Recepción y stock', desc: 'Registra la recepción física de la mercancía y actualiza el stock.' },
     ],
     fuentes: [
       { icon: _DB,    name: '1CRM · PO / Bills / Payments / Productos' },
@@ -55,51 +64,63 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
   },
   pagos: {
     label: 'Pagos',
+    queHago: 'Sube un comprobante de pago (screenshot o PDF) y lo coteja contra las Bills (pagos a proveedor) e Invoices (cobros a cliente) abiertas en 1CRM, para dejarlo registrado como pagado — completo o parcial.',
     agentes: [
-      { key: 'cotejo',  label: 'Cotejo de comprobante (Bills + Invoices)' },
-      { key: 'sinmatch', label: 'Alta guiada de PO/SO sin match' },
+      { key: 'cotejo',  label: 'Cotejo de comprobante (Bills + Invoices)', desc: 'Lee el comprobante y lo compara contra los montos pendientes de Bills e Invoices.' },
+      { key: 'sinmatch', label: 'Alta guiada de PO/SO sin match', desc: 'Si el comprobante no coincide con nada existente, te guía para crear el PO o SO correspondiente.' },
     ],
     fuentes: [{ icon: _DB, name: '1CRM · Bills / Invoices / Payments' }],
     conectado: ['1CRM'],
   },
   whatsapp: {
     label: 'WhatsApp',
+    queHago: 'Igual que el stream de Correo pero para conversaciones de WhatsApp: detecta oportunidades de venta, busca los productos y da de alta la oportunidad en 1CRM.',
     agentes: [
-      { key: 'lector', label: 'Lector de mensajes' },
-      { key: 'detector', label: 'Detector de oportunidad' },
-      { key: 'buscador', label: 'Buscador RFQ (interno + web)' },
-      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)' },
-      { key: 'seguimiento', label: 'Seguimiento' },
+      { key: 'lector', label: 'Lector de mensajes', desc: 'Lee los mensajes de WhatsApp entrantes.' },
+      { key: 'detector', label: 'Detector de oportunidad', desc: 'Decide si el mensaje es una oportunidad de venta real.' },
+      { key: 'buscador', label: 'Buscador RFQ (interno + web)', desc: 'Busca los productos solicitados en catálogo propio y proveedores externos.' },
+      { key: 'alta', label: 'Alta en CRM (cuenta + oportunidad)', desc: 'Crea cuenta y oportunidad en 1CRM.' },
+      { key: 'seguimiento', label: 'Seguimiento', desc: 'Da seguimiento a conversaciones que quedaron pendientes.' },
     ],
     fuentes: [{ icon: _CHAT, name: 'WhatsApp · chats' }, { icon: _DB, name: '1CRM · cuentas / contactos / oport.' }],
     conectado: ['WhatsApp', '1CRM'],
   },
   busquedas: {
     label: 'Búsquedas',
-    agentes: [{ key: 'buscador', label: 'Buscador' }, { key: 'imagen', label: 'Imagen' }],
+    queHago: 'Para identificar y cotizar un producto: dale un número de parte, una foto, o una ficha técnica en PDF/Excel/Word, y busca el producto en el catálogo propio y con proveedores, además de conseguirle una foto limpia.',
+    agentes: [
+      { key: 'buscador', label: 'Buscador', desc: 'Busca el producto en el catálogo propio (1CRM) y en proveedores / Google.' },
+      { key: 'imagen', label: 'Imagen', desc: 'Consigue una foto del producto y le quita el fondo/la deja en 500x500.' },
+    ],
     fuentes: [{ icon: _LINK, name: '1CRM Product Catalog' }, { icon: _LINK, name: '1CRM Proveedores' }, { icon: _GLOBE, name: 'Google Search' }],
     conectado: ['1CRM'],
   },
   publicacion: {
     label: 'Publicación',
-    agentes: [{ key: 'publicador', label: 'Publicador' }, { key: 'imagen', label: 'Imagen' }],
+    queHago: 'Para publicar productos nuevos en el catálogo de 1CRM: comparte el link de la página de un producto, o una ficha técnica en PDF/Excel/Word, y extrae nombre, marca, precio y características técnicas — te muestra la ficha y pide tu confirmación antes de crear el producto.',
+    agentes: [
+      { key: 'publicador', label: 'Publicador', desc: 'Extrae los datos del producto del link/PDF y lo publica en 1CRM tras tu aprobación.' },
+      { key: 'imagen', label: 'Imagen', desc: 'Procesa la foto del producto: le quita el fondo y la ajusta a 500x500px.' },
+    ],
     fuentes: [{ icon: _LINK, name: '1CRM Product Catalog' }],
     conectado: ['1CRM'],
   },
   cotizacion: {
     label: 'Cotización',
-    agentes: [{ key: 'ficha', label: 'Cotizador' }],
+    queHago: 'Arma cotizaciones formales para el cliente a partir de productos que ya están en el catálogo de 1CRM.',
+    agentes: [{ key: 'ficha', label: 'Cotizador', desc: 'Arma la ficha de cotización con los productos y precios elegidos.' }],
     fuentes: [{ icon: _DB, name: '1CRM · productos / precios' }],
     conectado: ['1CRM'],
   },
   ordenes: {
     label: 'Sales Order',
+    queHago: 'Sube la orden de compra que te mandó un cliente (PDF/Excel/Word/imagen) y la coteja contra las cotizaciones existentes, crea la Sales Order en 1CRM, y da seguimiento hasta el envío y la facturación.',
     agentes: [
-      { key: 'detector',   label: 'Lector de orden del cliente' },
-      { key: 'creador_so', label: 'Creador de SO en 1CRM' },
-      { key: 'envio',      label: 'Envío (shipping) y stock' },
-      { key: 'facturacion', label: 'Facturación / cierre de venta' },
-      { key: 'seguimiento', label: 'Seguimiento / estatus' },
+      { key: 'detector',   label: 'Lector de orden del cliente', desc: 'Lee la orden de compra del cliente en el formato que la haya mandado.' },
+      { key: 'creador_so', label: 'Creador de SO en 1CRM', desc: 'Crea la Sales Order en 1CRM, ligada a la cotización que corresponde.' },
+      { key: 'envio',      label: 'Envío (shipping) y stock', desc: 'Registra el envío y actualiza el stock disponible.' },
+      { key: 'facturacion', label: 'Facturación / cierre de venta', desc: 'Cierra la venta generando la facturación correspondiente.' },
+      { key: 'seguimiento', label: 'Seguimiento / estatus', desc: 'Da seguimiento al estatus de la orden hasta que se cierra.' },
     ],
     fuentes: [
       { icon: _DB,   name: '1CRM · Órdenes / Cuentas / Contactos' },
@@ -111,10 +132,17 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
 TIPO_CONFIG.mensajeria = TIPO_CONFIG.correo;
 TIPO_CONFIG.catalogo = {
   label: 'Catálogo',
-  agentes: [{ key: 'buscador', label: 'Buscador' }, { key: 'imagen', label: 'Imagen' }, { key: 'publicador', label: 'Publicador' }],
+  queHago: 'Combina búsqueda y publicación de productos: identifica un producto (link, foto o ficha técnica), le consigue una imagen limpia, y lo publica en el catálogo de 1CRM tras tu aprobación.',
+  agentes: [
+    { key: 'buscador', label: 'Buscador', desc: 'Busca el producto en el catálogo propio y en proveedores/Google.' },
+    { key: 'imagen', label: 'Imagen', desc: 'Consigue y limpia la foto del producto (quita fondo, ajusta a 500x500).' },
+    { key: 'publicador', label: 'Publicador', desc: 'Publica el producto en 1CRM tras tu aprobación.' },
+  ],
   fuentes: [{ icon: _LINK, name: '1CRM Product Catalog' }, { icon: _LINK, name: '1CRM Proveedores' }, { icon: _GLOBE, name: 'Google Search' }],
   conectado: ['1CRM'],
 };
+
+const QUE_HAGO_GENERICO = 'Stream genérico de conversación libre con Genie — sin un flujo automatizado específico asignado. Puedes preguntar sobre el CRM, pedir reportes o métricas, o platicar; Genie usa sus herramientas de consulta según lo que le pidas.';
 
 interface LogEntry {
   id: string;
@@ -195,6 +223,7 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
     <aside className="hidden md:flex w-sidebar-r h-full bg-brain-dark border-l border-brain-card flex-col overflow-y-auto scrollbar-thin flex-shrink-0">
       {cfg ? (
         <>
+          <QueHagoSection label={cfg.label} queHago={cfg.queHago} agentes={cfg.agentes} />
           {['correo', 'whatsapp', 'mensajeria'].includes(tipo || '') && <AutoDetectToggle streamId={streamId} />}
           <TypedAgentsSection streamId={streamId} cfg={cfg} />
           <LiveLogsSection streamId={streamId} />
@@ -222,6 +251,7 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
       ) : (
         <>
           {/* Stream genérico → panel legacy (agentes derivados de jobs + fuentes/infra globales) */}
+          <QueHagoSection label="Genérico" queHago={QUE_HAGO_GENERICO} agentes={[]} />
           <AgentsSection streamId={streamId} />
           <LiveLogsSection streamId={streamId} />
           <SourcesSection />
@@ -241,6 +271,48 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
         </>
       )}
     </aside>
+  );
+}
+
+// Botón expandible "¿Qué hago?" — documentación auto-explicativa del stream: para qué sirve y qué
+// hace cada agente. Pensado tanto para el usuario (humano) como para otras IAs que en el futuro
+// coordinen/orquesten varios streams y necesiten saber, sin adivinar ni leer código, qué hace cada
+// uno. Colapsado por defecto para no ocupar espacio de forma permanente.
+function QueHagoSection({ label, queHago, agentes }: { label: string; queHago: string; agentes: AgenteConfig[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-brain-card">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-brain-card/50 transition-colors"
+      >
+        <span className="flex items-center gap-1.5 text-[11px] font-semibold text-[#ccc]">
+          <HelpCircle className="w-3.5 h-3.5 text-[#3B82F6]" />
+          ¿Qué hago?
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 text-[#888] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-4 pb-3 animate-fade-in">
+          <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-1">Stream · {label}</p>
+          <p className="text-[11px] text-[#aaa] leading-relaxed mb-3">{queHago}</p>
+          {agentes.length > 0 && (
+            <>
+              <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-1.5">Agentes</p>
+              <div className="space-y-2">
+                {agentes.map((a) => (
+                  <div key={a.key}>
+                    <p className="text-[10px] font-medium text-[#ccc]">{a.label}</p>
+                    <p className="text-[10px] text-[#888] leading-snug">{a.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
