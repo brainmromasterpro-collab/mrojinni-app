@@ -1187,6 +1187,7 @@ interface CotejoPOData {
     }[];
     discrepancias?: string[];
     todo_ok?: boolean;
+    ambiguo?: boolean;
     resumen?: string;
     avisos?: string[];
     so_draft?: SODraft | null;
@@ -1250,6 +1251,20 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
   // yaConfirmado viene del historial (¿ya hay un [SO_CREADA] más adelante en el stream?) — evita
   // que un refresh de página reactive el botón y se dupliquen registros en el CRM.
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [quoteSel, setQuoteSel] = useState<string>('');
+  const [eligiendo, setEligiendo] = useState(false);
+
+  async function confirmarEleccion() {
+    if (!quoteSel || !streamId) return;
+    setEligiendo(true);
+    onProcesando?.('🔎 Recotejando con la cotización elegida…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user',
+      content: 'Elijo esta cotización',
+      procesado: false,
+      metadata: { so_action: 'elegir_cotizacion', po, quote_id: quoteSel },
+    });
+  }
 
   // Ya existe una Sales Order para este PO — no hay nada que cotejar ni crear, solo confirmarlo.
   if (c.ya_existe) {
@@ -1363,23 +1378,38 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
         </div>
       )}
 
-      {/* Cotizaciones candidatas */}
+      {/* Cotizaciones candidatas — si es AMBIGUO (varias, sin match exacto, ninguna citada en el
+          PO), se vuelve un picker: el usuario elige cuál es y se recoteja con esa como referencia.
+          Si no es ambiguo, se muestra solo informativo como antes. */}
       {cands.length > 0 && (
         <div className="px-4 py-2.5 border-t border-brain-border">
-          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">Cotización de referencia (candidatas)</p>
+          <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">
+            {c.ambiguo ? '¿Cuál cotización es?' : 'Cotización de referencia (candidatas)'}
+          </p>
+          {c.ambiguo && <p className="text-[11px] text-amber-700 mb-1.5">Encontré varias que podrían ser — elige la correcta.</p>}
           <div className="space-y-1">
             {cands.map((q) => (
-              <div key={q.id} className="flex items-center gap-2 text-[12px]">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-brain-success' : 'bg-brain-error'}`} />
-                <a href={q.url} target="_blank" rel="noreferrer" className="text-gray-900 hover:text-brain-accent truncate">{q.nombre}</a>
+              <label key={q.id} className={`flex items-center gap-2 text-[12px] ${c.ambiguo ? 'cursor-pointer' : ''}`}>
+                {c.ambiguo ? (
+                  <input type="radio" name={`quote-${streamId}`} checked={quoteSel === q.id} onChange={() => setQuoteSel(q.id)} className="accent-brain-accent flex-shrink-0" />
+                ) : (
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${q.vigente ? 'bg-brain-success' : 'bg-brain-error'}`} />
+                )}
+                <a href={q.url} target="_blank" rel="noreferrer" onClick={(e) => c.ambiguo && e.stopPropagation()} className="text-gray-900 hover:text-brain-accent truncate">{q.nombre}</a>
                 {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-accent/15 text-brain-accent">★ citada en el PO</span>}
                 <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
                 <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-brain-error'}`}>
                   {q.vigente ? (q.valid_until ? `vigente ${q.valid_until}` : 'vigente') : (q.motivo || 'no vigente')}
                 </span>
-              </div>
+              </label>
             ))}
           </div>
+          {c.ambiguo && (
+            <button onClick={confirmarEleccion} disabled={!quoteSel || eligiendo}
+              className="mt-2 px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+              {eligiendo ? 'Recotejando…' : 'Confirmar esta cotización'}
+            </button>
+          )}
         </div>
       )}
 
