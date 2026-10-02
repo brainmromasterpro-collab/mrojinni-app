@@ -1172,6 +1172,8 @@ interface CotejoPOData {
   po?: { cliente?: string; po_number?: string; moneda?: string; formato?: string; notas?: string };
   cotejo?: {
     cuenta?: { id: string; nombre: string; url: string } | null;
+    ya_existe?: boolean;
+    so?: { id: string; numero: string; so_stage?: string; url: string };
     items?: {
       part_number: string; part_number_cotizacion?: string;
       cantidad_po?: number | null; cantidad_cotizacion?: number | null;
@@ -1248,6 +1250,27 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
   // yaConfirmado viene del historial (¿ya hay un [SO_CREADA] más adelante en el stream?) — evita
   // que un refresh de página reactive el botón y se dupliquen registros en el CRM.
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+
+  // Ya existe una Sales Order para este PO — no hay nada que cotejar ni crear, solo confirmarlo.
+  if (c.ya_existe) {
+    return (
+      <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+          <span className="text-[13px]">🧾</span>
+          <span className="text-[12px] font-semibold text-gray-900">Orden de compra</span>
+          {po.po_number && <span className="text-[11px] font-mono text-gray-600">· {po.po_number}</span>}
+        </div>
+        <div className="px-4 py-3 bg-brain-success-bg">
+          <p className="text-[12px] text-brain-success font-medium">✓ Ya existe esta Sales Order — no hace falta crear otra.</p>
+          {c.so && (
+            <a href={c.so.url} target="_blank" rel="noreferrer" className="inline-block mt-1.5 text-[12px] text-brain-accent hover:underline">
+              Ver {c.so.numero} en 1CRM{c.so.so_stage ? ` · ${c.so.so_stage}` : ''}
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   async function confirmarCrear() {
     if (!draft || !streamId) return;
