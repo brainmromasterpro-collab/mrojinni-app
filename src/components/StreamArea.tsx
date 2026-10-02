@@ -2284,7 +2284,7 @@ function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { o
 // tracking → elegir SO → form (líneas + peso/dims/costo) → In Preparation → "shipped" → Shipped
 // ─────────────────────────────────────────────────────────────
 interface ShippingCand {
-  id?: string; nombre?: string; cliente?: string; so_stage?: string; url?: string;
+  id?: string; nombre?: string; cliente?: string; so_stage?: string; url?: string; po_number?: string;
   lineas?: { name?: string; mfr_part_no?: string; quantity?: string | number }[];
   // para modo marcar_shipped, los candidatos son SHIPPING_CREADO:
   shipping_id?: string; so_id?: string; tracking?: string; shipping_url?: string;
@@ -2346,6 +2346,7 @@ function ShippingCotejoWidget({ data, streamId, yaConfirmado, onProcesando }: { 
               <input type="radio" name={`ship-${modo}-${streamId}`} checked={sel === id} onChange={() => setSel(id)} className="accent-brain-accent mt-0.5" />
               <div>
                 <p className="text-gray-900">{c.nombre}{c.cliente ? <span className="text-gray-500"> · {c.cliente}</span> : null}</p>
+                {c.po_number && <p className="text-gray-500">PO <span className="font-mono">{c.po_number}</span></p>}
                 {c.tracking && <p className="text-gray-500 font-mono">{c.tracking}</p>}
                 <p className="text-gray-500">{(c.lineas || []).map((l) => `${l.quantity}× ${l.name}`).join(', ')}</p>
               </div>
