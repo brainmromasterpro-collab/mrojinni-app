@@ -1181,7 +1181,7 @@ interface CotejoPOData {
       match_parcial?: boolean; cotizacion?: { id: string; nombre: string } | null; en_varias?: boolean;
     }[];
     cotizaciones_candidatas?: {
-      id: string; nombre: string; items_cubiertos: number; total_items_po: number;
+      id: string; nombre: string; items_cubiertos: number; total_items_po: number; items_precio_ok?: number; puntaje?: number;
       valid_until?: string; quote_stage?: string; vigente?: boolean; motivo?: string; url: string;
       referenciada?: boolean;
     }[];
@@ -1386,7 +1386,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
           <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">
             {c.ambiguo ? '¿Cuál cotización es?' : 'Cotización de referencia (candidatas)'}
           </p>
-          {c.ambiguo && <p className="text-[11px] text-amber-700 mb-1.5">Encontré varias que podrían ser — elige la correcta.</p>}
+          {c.ambiguo && <p className="text-[11px] text-amber-700 mb-1.5">Ninguna coincide exacto en parte y precio. Te las muestro de mayor a menor coincidencia — elige una para convertirla en Sales Order.</p>}
           <div className="space-y-1">
             {cands.map((q) => (
               <label key={q.id} className={`flex items-center gap-2 text-[12px] ${c.ambiguo ? 'cursor-pointer' : ''}`}>
@@ -1398,6 +1398,11 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                 <a href={q.url} target="_blank" rel="noreferrer" onClick={(e) => c.ambiguo && e.stopPropagation()} className="text-gray-900 hover:text-brain-accent truncate">{q.nombre}</a>
                 {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-accent/15 text-brain-accent">★ citada en el PO</span>}
                 <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
+                {q.items_precio_ok !== undefined && (
+                  <span className={`flex-shrink-0 text-[10px] px-1 py-0.5 rounded ${q.items_precio_ok >= q.total_items_po ? 'bg-brain-success-bg text-brain-success' : 'bg-brain-warning-bg text-amber-700'}`}>
+                    precio {q.items_precio_ok >= q.total_items_po ? 'coincide' : `≠ (${q.items_precio_ok}/${q.total_items_po})`}
+                  </span>
+                )}
                 <span className={`ml-auto flex-shrink-0 text-[11px] ${q.vigente ? 'text-gray-500' : 'text-brain-error'}`}>
                   {q.vigente ? (q.valid_until ? `vigente ${q.valid_until}` : 'vigente') : (q.motivo || 'no vigente')}
                 </span>
@@ -1407,7 +1412,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
           {c.ambiguo && (
             <button onClick={confirmarEleccion} disabled={!quoteSel || eligiendo}
               className="mt-2 px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-              {eligiendo ? 'Recotejando…' : 'Confirmar esta cotización'}
+              {eligiendo ? 'Recotejando…' : 'Usar esta cotización'}
             </button>
           )}
         </div>
