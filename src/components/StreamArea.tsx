@@ -1188,6 +1188,7 @@ interface CotejoPOData {
     discrepancias?: string[];
     todo_ok?: boolean;
     ambiguo?: boolean;
+    forzada?: boolean;
     resumen?: string;
     avisos?: string[];
     so_draft?: SODraft | null;
@@ -1200,10 +1201,10 @@ interface SODraft {
   quote_id: string; quote_nombre: string;
   quote_vigente?: boolean; quote_stage?: string; quote_referenciada?: boolean;
   currency_id?: string; moneda?: string; terms?: string;
-  po_number?: string; para_nosotros?: boolean | null;
+  po_number?: string; para_nosotros?: boolean | null; aviso_vigencia?: boolean; file_url?: string;
   lineas: { part_number: string; descripcion?: string; unit_price?: number | null;
             quote_qty?: number | null; po_qty?: number | null; pedido?: boolean;
-            incluir_default?: boolean; cantidad?: number | null }[];
+            incluir_default?: boolean; cantidad?: number | null; precio_po?: number | null; precio?: number | null }[];
   origen?: Record<string, string>;
 }
 
@@ -1245,7 +1246,13 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
   const po = data.po || {};
   const c = data.cotejo || {};
   const draft = c.so_draft || null;
-  const [showPrev, setShowPrev] = useState(false);
+  const [showPrev, setShowPrev] = useState(!!data.cotejo?.forzada);
+  type LineaEdit = { precio: string; descripcion: string; mfr: string; cantidad: string };
+  const [edits, setEdits] = useState<Record<string, LineaEdit>>(() => Object.fromEntries(
+    (data.cotejo?.so_draft?.lineas || []).map((l) => [l.part_number, {
+      precio: l.precio != null ? String(l.precio) : (l.unit_price != null ? String(l.unit_price) : ''),
+      descripcion: l.descripcion || '', mfr: l.part_number || '', cantidad: l.cantidad != null ? String(l.cantidad) : '' }])));
+  const setEdit = (k: string, f: keyof LineaEdit, v: string) => setEdits((p) => ({ ...p, [k]: { ...p[k], [f]: v } }));
   const [incluidas, setIncluidas] = useState<Set<string>>(
     () => new Set((draft?.lineas || []).filter((l) => l.incluir_default).map((l) => l.part_number)));
   // yaConfirmado viene del historial (¿ya hay un [SO_CREADA] más adelante en el stream?) — evita
@@ -1291,16 +1298,22 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
     if (!draft || !streamId) return;
     setEstado('creando');
     onProcesando?.('🧾 Creando la Sales Order en 1CRM… Te aviso al terminar.');
-    const lineas = (draft.lineas || []).map((l) => ({
-      part_number: l.part_number, cantidad: l.cantidad, incluir: incluidas.has(l.part_number),
-    }));
+    const lineas = (draft.lineas || []).map((l) => {
+      const e = edits[l.part_number];
+      return {
+        part_number: l.part_number, incluir: incluidas.has(l.part_number),
+        cantidad: e?.cantidad !== '' && e?.cantidad != null ? Number(e.cantidad) : l.cantidad,
+        precio: e?.precio !== '' && e?.precio != null ? Number(e.precio) : undefined,
+        descripcion: e?.descripcion || undefined, mfr_part_no: e?.mfr ?? undefined,
+      };
+    });
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user',
       content: `Crear Sales Order (PO ${draft.po_number || ''})`,
       procesado: false,
       metadata: { so_action: 'crear', draft: {
         cuenta_id: draft.cuenta_id, currency_id: draft.currency_id, terms: draft.terms,
-        po_number: draft.po_number, quote_id: draft.quote_id, lineas,
+        po_number: draft.po_number, quote_id: draft.quote_id, file_url: draft.file_url, lineas,
       } },
     });
     setEstado('listo');
@@ -1413,7 +1426,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
           {c.ambiguo && (
             <button onClick={confirmarEleccion} disabled={!quoteSel || eligiendo}
               className="mt-2 px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-              {eligiendo ? 'Recotejando…' : 'Usar esta cotización'}
+              {eligiendo ? 'Preparando…' : 'Elegir y ver previo'}
             </button>
           )}
         </div>
@@ -1450,19 +1463,43 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
               </div>
               <div className="space-y-1">
                 <p className="text-[10px] uppercase tracking-wider text-gray-600">Productos (elige cuáles van a la orden)</p>
-                {(draft.lineas || []).map((l) => (
-                  <label key={l.part_number} className="flex items-center gap-2 text-[12px] cursor-pointer">
-                    <input type="checkbox" checked={incluidas.has(l.part_number)}
-                      onChange={(e) => setIncluidas((prev) => { const n = new Set(prev); if (e.target.checked) n.add(l.part_number); else n.delete(l.part_number); return n; })}
-                      className="accent-brain-accent" />
-                    <span className="font-mono text-gray-900">{l.part_number}</span>
-                    <span className={`text-[10px] px-1 rounded ${l.pedido ? 'bg-brain-success-bg text-brain-success' : 'bg-gray-100 text-gray-500'}`}>
-                      {l.pedido ? 'pedido' : 'no pedido'}
-                    </span>
-                    <span className="ml-auto text-gray-600">qty {l.cantidad} · ${(l.unit_price ?? 0).toLocaleString('es-MX')}</span>
-                  </label>
-                ))}
+                {(draft.lineas || []).map((l) => {
+                  const e = edits[l.part_number] || { precio: '', descripcion: '', mfr: '', cantidad: '' };
+                  const dif = l.precio_po != null && l.unit_price != null && Math.abs(l.precio_po - l.unit_price) > 0.01;
+                  const inp = 'border border-brain-border rounded px-1.5 py-1 text-[12px] text-gray-900 bg-white focus:outline-none focus:border-brain-accent';
+                  return (
+                    <div key={l.part_number} className="border border-brain-border rounded-md p-2 space-y-1.5">
+                      <label className="flex items-center gap-2 text-[12px] cursor-pointer">
+                        <input type="checkbox" checked={incluidas.has(l.part_number)}
+                          onChange={(ev) => setIncluidas((prev) => { const n = new Set(prev); if (ev.target.checked) n.add(l.part_number); else n.delete(l.part_number); return n; })}
+                          className="accent-brain-accent" />
+                        <span className="text-gray-900 truncate">{l.descripcion || l.part_number}</span>
+                        <span className={`text-[10px] px-1 rounded ${l.pedido ? 'bg-brain-success-bg text-brain-success' : 'bg-gray-100 text-gray-500'}`}>
+                          {l.pedido ? 'pedido' : 'no pedido'}
+                        </span>
+                      </label>
+                      {incluidas.has(l.part_number) && (
+                        <div className="grid grid-cols-6 gap-1.5 items-end">
+                          <label className="col-span-2 text-[10px] text-gray-500">Nº de parte
+                            <input value={e.mfr} onChange={(ev) => setEdit(l.part_number, 'mfr', ev.target.value)} className={`${inp} w-full font-mono`} /></label>
+                          <label className="col-span-1 text-[10px] text-gray-500">Cant.
+                            <input type="number" value={e.cantidad} onChange={(ev) => setEdit(l.part_number, 'cantidad', ev.target.value)} className={`${inp} w-full`} /></label>
+                          <label className="col-span-1 text-[10px] text-gray-500">Precio unit.
+                            <input type="number" step="0.01" value={e.precio} onChange={(ev) => setEdit(l.part_number, 'precio', ev.target.value)} className={`${inp} w-full`} /></label>
+                          <label className="col-span-2 text-[10px] text-gray-500">Descripción
+                            <input value={e.descripcion} onChange={(ev) => setEdit(l.part_number, 'descripcion', ev.target.value)} className={`${inp} w-full`} /></label>
+                        </div>
+                      )}
+                      {dif && (
+                        <p className="text-[10px] text-amber-700">Precio del PO ${l.precio_po?.toLocaleString('es-MX')} vs cotizado ${l.unit_price?.toLocaleString('es-MX')} — se usa el que dejes en "Precio unit.".</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+              {draft.aviso_vigencia && draft.puede_crear && (
+                <p className="text-[11px] text-amber-700">⚠ Esta cotización está vencida o no vigente; la elegiste tú, se crea de todos modos al confirmar.</p>
+              )}
               {!draft.puede_crear && (
                 <p className="text-[11px] text-amber-700">
                   ⚠ No se puede crear aún: {draft.quote_vigente === false ? 'la cotización de referencia está vencida' : draft.para_nosotros === false ? 'confirma que la orden es para nosotros' : 'revisa las discrepancias'}.
@@ -1472,7 +1509,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                 <button onClick={() => setShowPrev(false)} className="text-[12px] text-gray-500 hover:text-gray-700">Cancelar</button>
                 <button onClick={confirmarCrear} disabled={!draft.puede_crear || estado !== 'idle' || incluidas.size === 0}
                   className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
-                  {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Confirmar y crear en 1CRM'}
+                  {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Sí, generar Sales Order'}
                 </button>
               </div>
             </div>
