@@ -254,6 +254,7 @@ interface StreamAreaProps {
   onDocsConfirm: (messageId: string, products: { marca: string; modelo: string; qty: number }[]) => void;
   onPublicar: (rfqId: string, proveedorRank: number) => void;
   onClearStream: () => void;
+  onShareStream?: () => void;
 }
 
 const FILE_ACCEPT = '.txt,.doc,.docx,.xls,.xlsx,.pdf,.png,.jpg,.jpeg,.webp,.mp3,.m4a,.wav,.ogg';
@@ -264,7 +265,7 @@ const TIPO_LABEL: Record<string, string> = {
 };
 const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 
-export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onProcesando, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream }: StreamAreaProps) {
+export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkIdChange, onSendMessage, onFileUploaded, onProcesando, onDecision, onImagenDecision, onImagenRetry, onManualImageUpload, onParseConfirm, onDocsConfirm, onPublicar, onClearStream, onShareStream }: StreamAreaProps) {
   const [input, setInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [pendingDropFile, setPendingDropFile] = useState<File | null>(null);
@@ -600,18 +601,29 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
           <span className="text-[10px] font-medium text-brain-accent border border-brain-accent/30 bg-brain-accent-soft px-2.5 py-0.5 rounded-full">
             {TIPO_LABEL[stream.tipo] || stream.tipo}
           </span>
-          <button
-            onClick={() => {
-              if (window.confirm('¿Limpiar este stream? Los mensajes se quitarán de la vista. Los RFQs y la actividad quedan registrados en los logs.')) {
-                onClearStream();
-              }
-            }}
-            className="ml-auto flex items-center gap-1.5 text-[11px] text-[#999] hover:text-red-500 border border-brain-border hover:border-red-300 rounded-lg px-2.5 py-1 transition-colors"
-            title="Limpiar stream (la actividad queda en los logs)"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Limpiar
-          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (window.confirm('¿Limpiar este stream? Los mensajes se quitarán de la vista. Los RFQs y la actividad quedan registrados en los logs.')) {
+                  onClearStream();
+                }
+              }}
+              className="flex items-center gap-1.5 text-[11px] text-[#999] hover:text-red-500 border border-brain-border hover:border-red-300 rounded-lg px-2.5 py-1 transition-colors"
+              title="Limpiar stream (la actividad queda en los logs)"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Limpiar
+            </button>
+            {onShareStream && (
+              <button
+                onClick={onShareStream}
+                className="flex items-center gap-1.5 text-[11px] text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 rounded-lg px-2.5 py-1 transition-colors"
+                title="Compartir este stream"
+              >
+                🔗 Compartir
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

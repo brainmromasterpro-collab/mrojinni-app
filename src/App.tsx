@@ -2076,7 +2076,6 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
         onRenameStream={handleRenameStream}
         onReorderStreams={handleReorderStreams}
         equipo={equipo}
-        onShareStream={(id) => setSharingStreamId(id)}
       />
       {sharingStreamId && equipo && (
         <ShareModal
@@ -2114,6 +2113,7 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
             onDocsConfirm={handleDocsConfirm}
             onPublicar={handlePublicar}
             onClearStream={handleClearStream}
+            onShareStream={equipo && activeStreamId ? () => setSharingStreamId(activeStreamId) : undefined}
           />
         )}
         {!['dashboard', 'activity', 'connectors', 'agentes', 'infra'].includes(activeNav) && (

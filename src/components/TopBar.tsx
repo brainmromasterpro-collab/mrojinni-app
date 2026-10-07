@@ -25,10 +25,9 @@ interface TopBarProps {
   onRenameStream: (id: string, nombre: string) => void;
   onReorderStreams: (from: number, to: number) => void;
   equipo?: boolean;
-  onShareStream?: (id: string) => void;
 }
 
-export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream, onReorderStreams, equipo = true, onShareStream }: TopBarProps) {
+export default function TopBar({ streams, activeStreamId, onSelectStream, onCreateStream, onDeleteStream, onRenameStream, onReorderStreams, equipo = true }: TopBarProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [showTypeMenu, setShowTypeMenu] = useState(false);
@@ -116,9 +115,10 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
         <div className="relative">
           <button
             onClick={() => setShowTypeMenu((v) => !v)}
+            title="Nuevo stream" aria-label="Nuevo stream"
             className="px-3 py-1.5 text-[11px] rounded-md border border-dashed border-[#444] text-[#666] hover:text-[#999] hover:border-[#666] transition-colors whitespace-nowrap"
           >
-            + New Stream
+            +
           </button>
           {showTypeMenu && (
             <>
@@ -141,14 +141,6 @@ export default function TopBar({ streams, activeStreamId, onSelectStream, onCrea
       )}
 
       <div className="ml-auto flex items-center gap-2">
-        {equipo && activeStreamId && onShareStream && (
-          <button
-            onClick={() => onShareStream(activeStreamId)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 transition-colors whitespace-nowrap"
-          >
-            🔗 Compartir
-          </button>
-        )}
         <NotificationBell />
         <button className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] rounded-md bg-brain-card text-brain-accent border border-brain-accent/30 hover:border-brain-accent/60 transition-colors whitespace-nowrap">
           <RefreshCw className="w-3 h-3" />
