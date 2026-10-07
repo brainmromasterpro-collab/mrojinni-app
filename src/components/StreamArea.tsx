@@ -1201,6 +1201,7 @@ interface CotejoPOData {
     todo_ok?: boolean;
     ambiguo?: boolean;
     forzada?: boolean;
+    ventas_previas?: { tipo: string; numero: string; fecha: string; descripcion: string; precio: number | null; cantidad: number | null; coincide_precio: boolean; coincide_descripcion: boolean; url: string }[];
     resumen?: string;
     avisos?: string[];
     so_draft?: SODraft | null;
@@ -1400,6 +1401,25 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Ventas previas al cliente (facturas / SO) que coinciden en descripción y/o precio */}
+      {(c.ventas_previas || []).length > 0 && (
+        <div className="px-4 py-2.5 border-t border-brain-border bg-brain-success-bg">
+          <p className="text-[10px] uppercase tracking-wider text-brain-success mb-1.5">Ya se vendió antes a este cliente</p>
+          <div className="space-y-1">
+            {(c.ventas_previas || []).map((v, i) => (
+              <div key={i} className="flex items-center gap-2 text-[12px] flex-wrap">
+                <a href={v.url} target="_blank" rel="noreferrer" className="text-gray-900 hover:text-brain-accent">{v.tipo} {v.numero}{v.fecha ? ` · ${v.fecha}` : ''}</a>
+                <span className="text-gray-700 truncate">{v.descripcion}</span>
+                <span className="text-gray-700 flex-shrink-0">${(v.precio ?? 0).toLocaleString('es-MX')}</span>
+                {v.coincide_precio && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-success-bg text-brain-success border border-brain-success/30">precio idéntico</span>}
+                {v.coincide_descripcion && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-success-bg text-brain-success border border-brain-success/30">misma descripción</span>}
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-600 mt-1.5">Esa línea no está en ninguna cotización abierta; elige la cotización más cercana abajo y deja el precio del PO en el previo.</p>
         </div>
       )}
 
