@@ -1193,7 +1193,7 @@ interface CotejoPOData {
       match_parcial?: boolean; cotizacion?: { id: string; nombre: string } | null; en_varias?: boolean;
     }[];
     cotizaciones_candidatas?: {
-      id: string; nombre: string; items_cubiertos: number; total_items_po: number; items_precio_ok?: number; puntaje?: number; coincidencia?: string;
+      id: string; nombre: string; items_cubiertos: number; total_items_po: number; items_precio_ok?: number; puntaje?: number; coincidencia?: string; cerrada?: boolean;
       valid_until?: string; quote_stage?: string; vigente?: boolean; motivo?: string; url: string;
       referenciada?: boolean;
     }[];
@@ -1442,6 +1442,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                 )}
                 <a href={q.url} target="_blank" rel="noreferrer" onClick={(e) => c.ambiguo && e.stopPropagation()} className="text-gray-900 hover:text-brain-accent truncate">{q.nombre}</a>
                 {q.referenciada && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-brain-accent/15 text-brain-accent">★ citada en el PO</span>}
+                {(q.cerrada || q.quote_stage === 'Closed Accepted') && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600">cerrada</span>}
                 {c.ambiguo && q.coincidencia && <span className="flex-shrink-0 text-[10px] px-1 py-0.5 rounded bg-gray-100 text-gray-600">{(cands.indexOf(q) + 1)}º · {q.coincidencia}</span>}
                 <span className="text-gray-500 flex-shrink-0">cubre {q.items_cubiertos}/{q.total_items_po}</span>
                 {q.items_precio_ok !== undefined && (
