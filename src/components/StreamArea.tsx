@@ -1231,7 +1231,7 @@ interface CotejoProveedorLink {
 }
 interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
-  cliente?: string; currency_id?: string; terminos_pago?: string; sin_terminos_pago?: boolean;
+  cliente?: string; currency_id?: string; terminos_pago?: string; terminos_origen?: string; sin_terminos_pago?: boolean;
   tax_code_id?: string;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
@@ -1659,12 +1659,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
                 Proveedor <span className="text-gray-700">{g.proveedor_nombre || '—'}</span>
-                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span></span>}
+                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span>{g.terminos_origen ? ` (del ${g.terminos_origen})` : ''}</span>}
               </p>
               {g.sin_terminos_pago && (
                 <p className="text-[11px] text-brain-error mt-0.5">
-                  ⚠ Este cliente no tiene Condiciones de pago configuradas en 1CRM (campo obligatorio) —
-                  configúralas en su cuenta antes de poder crear esta orden de compra.
+                  ⚠ Ni el proveedor ni el cliente tienen Condiciones de pago configuradas en 1CRM (campo obligatorio) —
+                  configúralas en la cuenta del proveedor o del cliente antes de poder crear esta orden de compra.
                 </p>
               )}
               <div className="mt-1 space-y-0.5">
