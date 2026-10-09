@@ -1659,12 +1659,12 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
                 Proveedor <span className="text-gray-700">{g.proveedor_nombre || '—'}</span>
-                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span>{g.terminos_origen ? ` (del ${g.terminos_origen})` : ''}</span>}
+                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span>{' (del proveedor)'}</span>}
               </p>
               {g.sin_terminos_pago && (
                 <p className="text-[11px] text-brain-error mt-0.5">
-                  ⚠ Ni el proveedor ni el cliente tienen Condiciones de pago configuradas en 1CRM (campo obligatorio) —
-                  configúralas en la cuenta del proveedor o del cliente antes de poder crear esta orden de compra.
+                  ⚠ El proveedor no tiene Condiciones de pago configuradas en 1CRM (campo obligatorio) —
+                  configúralas en la cuenta del proveedor antes de poder crear esta orden de compra.
                 </p>
               )}
               <div className="mt-1 space-y-0.5">
