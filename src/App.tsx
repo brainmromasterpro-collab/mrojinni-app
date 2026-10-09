@@ -1286,7 +1286,7 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
       return;
     }
 
-    if (streamTipo === 'ordenes' && isPO && !file.url.startsWith('blob:')) {
+    if (streamTipo === 'ordenes' && (isPO || isImage) && !file.url.startsWith('blob:')) {
       setMessages((prev) => [...prev.filter((m) => !(m.contenido as any)?.procesando), {
         id: crypto.randomUUID(), stream_id: activeStreamId, rol: 'assistant', tipo: 'rfq-log',
         contenido: { text: `📄 Leyendo la orden de compra «${file.name}» y cotejando contra las cotizaciones del cliente…`, status: 'querying', procesando: true },

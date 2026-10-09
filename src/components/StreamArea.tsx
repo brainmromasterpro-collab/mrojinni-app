@@ -380,7 +380,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
   // RFQ" — en compras es comprobante/recepción/factura, en rfq es un RFQ que el usuario captura,
   // y en pagos es SIEMPRE un comprobante de pago. En los tres va directo (el backend/flujo
   // decide), sin el modal de intención.
-  const _imgDirecto = stream?.tipo === 'compras' || stream?.tipo === 'rfq' || stream?.tipo === 'pagos';
+  const _imgDirecto = stream?.tipo === 'compras' || stream?.tipo === 'rfq' || stream?.tipo === 'pagos' || stream?.tipo === 'ordenes';
   function routeSelected(files: FileList | null) {
     if (!files || files.length === 0) return;
     const arr = Array.from(files);
