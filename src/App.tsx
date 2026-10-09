@@ -49,6 +49,35 @@ const demoMessages: Message[] = [];
 // El sistema se cierra solo tras varias horas sin actividad.
 const AUTO_LOGOUT_HORAS = 8;
 
+// Aviso de versión nueva: compara el bundle con el que cargó esta pestaña contra el index.html
+// actual del servidor. Evita quedarse en una versión vieja tras un deploy (pasó varias veces: el
+// navegador seguía mostrando pantallas anteriores).
+function BannerNuevaVersion() {
+  const [hay, setHay] = useState(false);
+  useEffect(() => {
+    const actual = Array.from(document.scripts).map((sc) => sc.src.match(/assets\/index-[\w-]+\.js/)?.[0]).find(Boolean);
+    if (!actual) return;
+    const revisar = async () => {
+      try {
+        const html = await (await fetch(`/?_=${Date.now()}`, { cache: 'no-store' })).text();
+        const nuevo = html.match(/assets\/index-[\w-]+\.js/)?.[0];
+        if (nuevo && nuevo !== actual) setHay(true);
+      } catch { /* sin red: no estorbar */ }
+    };
+    revisar();
+    const t = window.setInterval(revisar, 60000);
+    window.addEventListener('focus', revisar);
+    return () => { clearInterval(t); window.removeEventListener('focus', revisar); };
+  }, []);
+  if (!hay) return null;
+  return (
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 bg-brain-accent text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
+      <span>Hay una versión nueva de la app.</span>
+      <button onClick={() => window.location.reload()} className="font-semibold underline">Actualizar ahora</button>
+    </div>
+  );
+}
+
 function BannerReactivando({ detalle }: { detalle: string }) {
   return (
     <div className="fixed top-0 left-0 right-0 z-[100] bg-brain-accent/15 border-b border-brain-accent/40 px-4 py-2 flex items-center gap-2 text-[11px] text-white">
@@ -136,6 +165,7 @@ export default function App() {
 
   return (
     <>
+      <BannerNuevaVersion />
       {reactivando && <BannerReactivando detalle={reactivando} />}
       <AppContent equipo={acceso.equipo} streamIdsPermitidos={acceso.streamIds} />
     </>
