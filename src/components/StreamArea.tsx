@@ -302,7 +302,10 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notificaciones' },
         (payload) => {
-          const n = payload.new as { tipo?: string; mensaje?: string };
+          const n = payload.new as { tipo?: string; mensaje?: string; stream_id?: string | null };
+          // Solo el stream DUEÑO de la notificación muestra el widget (antes se pintaba en cualquier
+          // stream abierto: un producto publicado en Productos aparecía también en Sales Order).
+          if (n.stream_id && stream?.id && n.stream_id !== stream.id) return;
           if (n.tipo === 'bulk' && n.mensaje) {
             try {
               const parsed = JSON.parse(n.mensaje);
@@ -314,7 +317,7 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [onActiveBulkIdChange]);
+  }, [onActiveBulkIdChange, stream?.id]);
 
   async function handleSend() {
     const text = input.trim();
