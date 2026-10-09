@@ -1231,7 +1231,8 @@ interface CotejoProveedorLink {
 }
 interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
-  cliente?: string; currency_id?: string; terminos_pago?: string; terminos_origen?: string; sin_terminos_pago?: boolean;
+  cliente?: string; currency_id?: string; moneda_codigo?: string; moneda_so_id?: string;
+  monedas_opciones?: { id: string; codigo: string; nombre: string }[]; terminos_pago?: string; terminos_origen?: string; sin_terminos_pago?: boolean;
   tax_code_id?: string;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
@@ -1594,16 +1595,37 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo' | 'cancelado'>(yaConfirmado ? 'listo' : 'idle');
   const money = (n?: number | string | null) =>
     (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  // BORRADOR editable del PO por grupo: lo que el usuario ve aquí es exactamente lo que se crea.
+  type LineaDraft = { name: string; mfr_part_no?: string; quantity: number; unit_price?: number };
+  type Edit = { proveedor: string; currency_id: string; lineas: LineaDraft[] };
+  const [edits, setEdits] = useState<Record<string, Edit>>(() => Object.fromEntries(
+    grupos.map((g) => [g.so_id, { proveedor: g.proveedor_nombre || '', currency_id: g.currency_id || '',
+      lineas: g.lineas.map((l) => ({ ...l })) }])));
+  const ed = (g: CotejoProveedorGrupo): Edit => edits[g.so_id] || { proveedor: g.proveedor_nombre || '', currency_id: g.currency_id || '', lineas: g.lineas };
+  const setEd = (soId: string, patch: Partial<Edit>) => setEdits((prev) => ({ ...prev, [soId]: { ...prev[soId], ...patch } }));
+  const setLinea = (soId: string, i: number, patch: Partial<LineaDraft>) => setEdits((prev) => ({
+    ...prev, [soId]: { ...prev[soId], lineas: prev[soId].lineas.map((l, j) => j === i ? { ...l, ...patch } : l) } }));
+  const totalDe = (e: Edit) => e.lineas.reduce((a, l) => a + (Number(l.unit_price) || 0) * (Number(l.quantity) || 0), 0);
+  const nombrePO = (g: CotejoProveedorGrupo, e: Edit) => {
+    const modelos = Array.from(new Set(e.lineas.map((l) => l.mfr_part_no).filter(Boolean))).join(', ');
+    const base = `Compra para ${g.so_nombre || g.so_id}`;
+    return modelos ? `${modelos} — ${base}` : base;
+  };
+  const monedaCodigo = (g: CotejoProveedorGrupo, e: Edit) =>
+    (g.monedas_opciones || []).find((m) => m.id === e.currency_id)?.codigo || g.moneda_codigo || '';
 
   async function confirmarCrear() {
     if (!streamId || incluidos.size === 0) return;
     setEstado('creando');
     onProcesando?.('🛒 Creando la(s) orden(es) de compra en 1CRM… Te aviso al terminar.');
-    const drafts = grupos.filter((g) => incluidos.has(g.so_id)).map((g) => ({
-      so_id: g.so_id, proveedor_nombre: g.proveedor_nombre, currency_id: g.currency_id,
-      terminos_pago: g.terminos_pago, tax_code_id: g.tax_code_id,
-      lineas: g.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
-    }));
+    const drafts = grupos.filter((g) => incluidos.has(g.so_id)).map((g) => {
+      const e = ed(g);
+      return {
+        so_id: g.so_id, proveedor_nombre: e.proveedor, currency_id: e.currency_id,
+        terminos_pago: g.terminos_pago, tax_code_id: g.tax_code_id,
+        lineas: e.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
+      };
+    });
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user',
       content: `Crear ${drafts.length} orden(es) de compra`,
@@ -1658,8 +1680,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                 )}
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                Proveedor <span className="text-gray-700">{g.proveedor_nombre || '—'}</span>
-                {g.terminos_pago && <span> · Términos <span className="text-gray-700">{g.terminos_pago}</span>{' (del proveedor)'}</span>}
+                {g.terminos_pago && <span>Términos <span className="text-gray-700">{g.terminos_pago}</span>{' (del proveedor)'}</span>}
               </p>
               {g.sin_terminos_pago && (
                 <p className="text-[11px] text-brain-error mt-0.5">
@@ -1683,6 +1704,51 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               </div>
             </div>
           </label>
+          {incluidos.has(g.so_id) && edits[g.so_id] && estado === 'idle' && (() => {
+            const e = ed(g);
+            const inp = 'bg-white border border-brain-border rounded px-1.5 py-1 text-[11px] text-gray-900 focus:outline-none focus:border-brain-accent';
+            return (
+              <div className="mt-2 ml-6 rounded-lg border border-brain-border bg-gray-50/60 p-3 text-[11px] space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500">Borrador del Purchase Order · lo que se va a crear</p>
+                <div className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 items-center">
+                  <span className="text-gray-500">Nombre del PO</span>
+                  <span className="text-gray-900 break-words">{nombrePO(g, e)}</span>
+                  <span className="text-gray-500">Proveedor</span>
+                  <input className={inp} value={e.proveedor} onChange={(ev) => setEd(g.so_id, { proveedor: ev.target.value })} />
+                  <span className="text-gray-500">Moneda</span>
+                  <select className={inp} value={e.currency_id} onChange={(ev) => setEd(g.so_id, { currency_id: ev.target.value })}>
+                    {(g.monedas_opciones || []).map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nombre}</option>)}
+                  </select>
+                  <span className="text-gray-500">Condiciones</span>
+                  <span className="text-gray-900">{g.terminos_pago || '—'} <span className="text-gray-500">(del proveedor; si cambias el proveedor se releen al crear)</span></span>
+                  <span className="text-gray-500">Ligado a</span>
+                  <a href={g.so_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">{g.so_nombre} · #{g.so_numero} — {g.cliente}</a>
+                  <span className="text-gray-500">Estado</span>
+                  <span className="text-gray-900">Ordered</span>
+                </div>
+                <div>
+                  <div className="grid grid-cols-[1fr_110px_56px_84px_84px] gap-1.5 text-[10px] text-gray-500 mb-1">
+                    <span>Producto</span><span>No. de parte</span><span>Cant.</span><span>Precio u.</span><span className="text-right">Importe</span>
+                  </div>
+                  {e.lineas.map((l, i) => (
+                    <div key={i} className="grid grid-cols-[1fr_110px_56px_84px_84px] gap-1.5 items-center mb-1">
+                      <input className={inp} value={l.name} onChange={(ev) => setLinea(g.so_id, i, { name: ev.target.value })} />
+                      <input className={`${inp} font-mono`} value={l.mfr_part_no || ''} onChange={(ev) => setLinea(g.so_id, i, { mfr_part_no: ev.target.value })} />
+                      <input className={inp} type="number" min={0} value={l.quantity} onChange={(ev) => setLinea(g.so_id, i, { quantity: Number(ev.target.value) })} />
+                      <input className={inp} type="number" min={0} step="0.01" value={l.unit_price ?? 0} onChange={(ev) => setLinea(g.so_id, i, { unit_price: Number(ev.target.value) })} />
+                      <span className="text-right text-gray-900">{money((Number(l.unit_price) || 0) * (Number(l.quantity) || 0))}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-end gap-2 pt-1 border-t border-brain-border text-gray-900 font-semibold">
+                    <span>Total</span><span>{money(totalDe(e))} {monedaCodigo(g, e)}</span>
+                  </div>
+                </div>
+                <p className="text-gray-500">
+                  También se crea la <span className="text-gray-700">cuenta por pagar (Bill)</span> ligada al PO por el mismo total, con fecha y vencimiento hoy y las mismas condiciones. Impuestos según el perfil fiscal de la cuenta del cliente.
+                </p>
+              </div>
+            );
+          })()}
         </div>
       ))}
 
