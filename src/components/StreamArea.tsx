@@ -1253,7 +1253,7 @@ function Prov({ label, val, src }: { label: string; val?: string; src?: string }
   return (
     <div>
       <span className="text-gray-500">{label}: </span>
-      <span className="text-gray-200">{val || '—'}</span>
+      <span className="text-gray-900 font-medium">{val || '—'}</span>
       {src && <span className="block text-[10px] text-gray-600">{src}</span>}
     </div>
   );
@@ -1534,6 +1534,38 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                   );
                 })}
               </div>
+
+              {/* Desglose de totales (Subtotal, IVA 16%, Total) sobre los productos seleccionados */}
+              {(() => {
+                const subtotal = (draft.lineas || [])
+                  .filter((l) => incluidas.has(l.part_number))
+                  .reduce((a, l) => {
+                    const e = edits[l.part_number];
+                    const precio = e?.precio !== '' && e?.precio != null ? Number(e.precio)
+                      : (l.precio != null ? l.precio : l.unit_price != null ? l.unit_price : 0);
+                    const cantidad = e?.cantidad !== '' && e?.cantidad != null ? Number(e.cantidad)
+                      : (l.cantidad != null ? l.cantidad : l.po_qty != null ? l.po_qty : l.quote_qty ?? 0);
+                    return a + (Number(precio) || 0) * (Number(cantidad) || 0);
+                  }, 0);
+                const iva = subtotal * 0.16;
+                const total = subtotal + iva;
+                const cod = draft.moneda || 'MXN';
+                const mxn = (n: number) => `${n.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${cod}`;
+                if (incluidas.size === 0) return null;
+                return (
+                  <div className="border-t border-brain-border pt-2 mt-1 space-y-0.5 text-[12px]">
+                    <div className="flex justify-between text-gray-700">
+                      <span>Subtotal</span><span className="text-gray-900">{mxn(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-gray-700">
+                      <span>IVA 16%</span><span className="text-gray-900">{mxn(iva)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold pt-0.5 border-t border-brain-border">
+                      <span className="text-gray-900">Total</span><span className="text-gray-900">{mxn(total)}</span>
+                    </div>
+                  </div>
+                );
+              })()}
               {draft.aviso_vigencia && draft.puede_crear && (
                 <p className="text-[11px] text-amber-700">⚠ Esta cotización está vencida o no vigente; la elegiste tú, se crea de todos modos al confirmar.</p>
               )}
