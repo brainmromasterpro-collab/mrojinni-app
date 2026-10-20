@@ -1254,7 +1254,7 @@ function Prov({ label, val, src }: { label: string; val?: string; src?: string }
     <div>
       <span className="text-gray-500">{label}: </span>
       <span className="text-gray-900 font-medium">{val || '—'}</span>
-      {src && <span className="block text-[10px] text-gray-600">{src}</span>}
+      {src && <span className="block text-[10px] text-gray-500">{src}</span>}
     </div>
   );
 }
