@@ -143,6 +143,49 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
     ],
     fuentes: [{ icon: _DB, name: '1CRM · Bills / Invoices / Payments' }],
     conectado: ['1CRM'],
+    inventario: {
+      entradas: [
+        { icon: '📷', label: 'Foto o captura de comprobante de pago' },
+        { icon: '📄', label: 'PDF de comprobante o transferencia' },
+        { icon: '💬', label: 'Texto: "registra pago de $X a proveedor Y"' },
+      ],
+      etapas: [
+        {
+          titulo: 'Leer el comprobante',
+          items: [
+            'Lee el comprobante con visión (foto o PDF)',
+            'Extrae monto, moneda, fecha y referencia / folio',
+            'Si algo no es legible, lo reporta — nunca inventa cifras',
+          ],
+        },
+        {
+          titulo: 'Cotejar contra cuentas abiertas',
+          items: [
+            'Consulta Bills (cuentas por pagar a proveedores) e Invoices (cuentas por cobrar de clientes) abiertas en 1CRM',
+            'Cruza el monto del comprobante con las cuentas pendientes (tolerancia 1%)',
+            'Si hay match te muestra la candidata; si no, te muestra todas las abiertas para que elijas',
+            'Detecta pagos parciales: si el monto no cubre el total lo dice y lleva el saldo acumulado',
+            'Funciona para ambas direcciones: tú pagas a proveedor (Bill) o cliente te paga a ti (Invoice)',
+          ],
+        },
+        {
+          titulo: 'Registrar el pago',
+          items: [
+            'Crea el Payment en 1CRM ligado al Bill o Invoice seleccionado',
+            'Guarda fecha, referencia, monto y dirección (outgoing / incoming)',
+            'El saldo restante lo lleva este sistema desde el historial (1CRM no lo actualiza solo)',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Siempre disponible',
+          items: [
+            'Consulta qué cuentas están abiertas y cuánto falta pagar o cobrar',
+            'Muestra el historial de pagos registrados en el stream',
+          ],
+        },
+      ],
+    },
   },
   whatsapp: {
     label: 'WhatsApp',
