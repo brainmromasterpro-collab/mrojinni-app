@@ -404,17 +404,10 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
           {['correo', 'whatsapp', 'mensajeria'].includes(tipo || '') && <AutoDetectToggle streamId={streamId} />}
           <TypedAgentsSection streamId={streamId} cfg={cfg} />
           <LiveLogsSection streamId={streamId} />
-          <Section title="Fuentes">
-            <div className="px-3 space-y-0.5">
-              {cfg.fuentes.map((f, i) => (
-                <div key={`${f.name}-${i}`} className="flex items-center gap-2 px-1 py-1.5 text-[10px] text-[#888]">
-                  <span className="flex-shrink-0">{f.icon}</span>
-                  <span className="flex-1 min-w-0 truncate">{f.name}</span>
-                </div>
-              ))}
-            </div>
-            {cfg.inventario && <InventarioSection inventario={cfg.inventario} />}
-          </Section>
+          <SourcesSection
+            defaultSources={cfg.fuentes.map((f) => ({ ...f, type: 'link' as const }))}
+            inventario={cfg.inventario}
+          />
           <Section title="Conectado">
             <div className="px-3 space-y-1">
               {cfg.conectado.map((name) => (
@@ -800,8 +793,9 @@ function LiveLogsSection({ streamId }: { streamId: string | null }) {
 
 type AddMode = 'idle' | 'file' | 'link' | 'text';
 
-function SourcesSection() {
-  const [sources, setSources] = useState<Source[]>(defaultFuentes);
+function SourcesSection({ defaultSources, inventario }: { defaultSources?: Source[]; inventario?: TipoConfig['inventario'] }) {
+  const baseDefaults = defaultSources ?? defaultFuentes;
+  const [sources, setSources] = useState<Source[]>(baseDefaults);
   const [addMode, setAddMode] = useState<AddMode>('idle');
   const [linkValue, setLinkValue] = useState('');
   const [textValue, setTextValue] = useState('');
@@ -983,7 +977,7 @@ function SourcesSection() {
           <div key={`${f.name}-${i}`} className="group flex items-center gap-2 px-1 py-1.5 text-[10px] text-[#888] hover:text-[#ccc] rounded hover:bg-brain-card/50 transition-colors">
             <span className="flex-shrink-0">{f.icon}</span>
             <span className="flex-1 min-w-0 truncate">{f.name}</span>
-            {i >= defaultFuentes.length && (
+            {i >= baseDefaults.length && (
               <button
                 onClick={() => removeSource(i)}
                 className="opacity-0 group-hover:opacity-100 w-4 h-4 flex items-center justify-center rounded text-[#555] hover:text-[#EF4444] transition-all"
@@ -994,6 +988,7 @@ function SourcesSection() {
           </div>
         ))}
       </div>
+      {inventario && <InventarioSection inventario={inventario} />}
     </div>
   );
 }
