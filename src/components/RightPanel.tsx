@@ -15,12 +15,14 @@ interface RightPanelProps {
 // adivinar, qué hace cada uno. Un tipo no listado (generico/compras/general) usa el panel legacy
 // (agentes derivados de jobs) más una explicación genérica del stream libre.
 interface AgenteConfig { key: string; label: string; desc: string; }
+interface InventarioEtapa { titulo: string; items: string[]; undo?: boolean; }
 interface TipoConfig {
   label: string;
   queHago: string;
   agentes: AgenteConfig[];
   fuentes: { icon: string; name: string }[];
   conectado: string[];
+  inventario?: { entradas: { icon: string; label: string }[]; etapas: InventarioEtapa[]; };
 }
 const _LINK = '\u{1F517}', _GLOBE = '\u{1F310}', _MAIL = '✉', _CHAT = '\u{1F4AC}', _DB = '\u{1F5C4}';
 const TIPO_CONFIG: Record<string, TipoConfig> = {
@@ -50,17 +52,87 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
   },
   compras: {
     label: 'Compras',
-    queHago: 'Ciclo completo de compra a proveedor: desde comprar un producto vía un link o eBay hasta registrar el pago, la recepción de mercancía y el cierre de la venta al cliente final.',
+    queHago: 'Ciclo completo de compra a proveedor en 4 etapas:\n\n1. COTEJO + PO: lee links o capturas de tiendas (eBay, Amazon, ML…), coteja contra Sales Orders abiertas, crea el PurchaseOrder y la Bill en 1CRM vinculados a la venta. Detecta automáticamente la moneda, busca/crea el proveedor y agrupa por SO.\n\n2. PAGO: lee el comprobante (imagen o PDF), extrae monto/fecha/referencia y lo registra en la Bill abierta — soporta pagos parciales.\n\n3. RECEPCIÓN: acepta fotos de paquete, packing lists, order confirmations o número de tracking. Confirma recepción completa o parcial (acumula entrega a entrega) y suma stock al catálogo automáticamente.\n\n4. CIERRE: marca la SO como entregada y/o facturada y la cierra en 1CRM.\n\nCada etapa tiene opción de deshacer.',
     agentes: [
-      { key: 'match',      label: 'Match venta ↔ proveedor (PO + cuenta por pagar)', desc: 'Crea la orden de compra (PO) y la cuenta por pagar (Bill) a partir del link del proveedor.' },
-      { key: 'pago',       label: 'Conciliación de pagos', desc: 'Lee comprobantes de pago y los concilia contra las cuentas por pagar abiertas.' },
-      { key: 'recepcion',  label: 'Recepción y stock', desc: 'Registra la recepción física de la mercancía y actualiza el stock.' },
+      { key: 'match',      label: 'Match venta ↔ proveedor (PO + cuenta por pagar)', desc: 'Crea la orden de compra (PO) y la cuenta por pagar (Bill) a partir del link del proveedor, vinculados a la Sales Order correspondiente.' },
+      { key: 'pago',       label: 'Conciliación de pagos', desc: 'Lee comprobantes de pago y los concilia contra las cuentas por pagar abiertas (Bills).' },
+      { key: 'recepcion',  label: 'Recepción y stock', desc: 'Registra la recepción física de la mercancía (completa o parcial) y actualiza el stock en el catálogo.' },
     ],
     fuentes: [
-      { icon: _DB,    name: '1CRM · PO / Bills / Payments / Productos' },
-      { icon: _GLOBE, name: 'Proveedor (link / eBay via SerpAPI)' },
+      { icon: _DB,    name: '1CRM · PurchaseOrders / Bills / Payments' },
+      { icon: _DB,    name: '1CRM · Sales Orders (cotejo de compra)' },
+      { icon: _DB,    name: '1CRM · Productos / Catálogo (stock)' },
+      { icon: _GLOBE, name: 'eBay / Amazon / ML · links (SerpAPI)' },
     ],
     conectado: ['1CRM'],
+    inventario: {
+      entradas: [
+        { icon: '🔗', label: 'Links de producto (eBay, Amazon, ML, AliExpress…)' },
+        { icon: '📷', label: 'Screenshot de tienda online' },
+        { icon: '📄', label: 'PDF / captura de order confirmation' },
+        { icon: '🧾', label: 'Comprobante de pago (imagen o PDF)' },
+        { icon: '📦', label: 'Foto de paquete recibido' },
+        { icon: '📋', label: 'Packing list (imagen o PDF)' },
+        { icon: '🚚', label: 'Número de tracking (texto o captura)' },
+      ],
+      etapas: [
+        {
+          titulo: 'Etapa 1 · Cotejo y Purchase Order',
+          items: [
+            'Lee cada link/captura: nombre, número de parte, precio, tienda, moneda',
+            'Coteja contra Sales Orders abiertas y agrupa por SO',
+            'Reporta productos sin match ("gasto general") sin forzar asignación',
+            'Busca o crea el proveedor en 1CRM automáticamente',
+            'Crea el PurchaseOrder con líneas y número de parte, vinculado a la SO',
+            'Crea la Bill (cuenta por pagar) vinculada al PO con términos del proveedor',
+            'Detecta moneda (USD / MXN) en ambos registros',
+            'Soporta compras que cubren productos de varias Sales Orders a la vez',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Etapa 2 · Pago',
+          items: [
+            'Recibe comprobante de pago (imagen o PDF)',
+            'Extrae con visión: monto, fecha, referencia, banco / tienda',
+            'Asocia el pago a la Bill correspondiente en 1CRM',
+            'Lleva saldo de la cuenta por pagar (soporta pagos parciales)',
+          ],
+        },
+        {
+          titulo: 'Etapa 3 · Recepción',
+          items: [
+            'Registra número de tracking / guía de envío en el PO',
+            'Clasifica el documento: packing list / order confirmation / foto de paquete / tracking / otro',
+            'Packing list: extrae productos y cantidades estructuradas por línea',
+            'Foto de paquete: describe con visión para que confirmes',
+            'Recepción completa: cierra el PO y suma stock al catálogo',
+            'Recepción parcial: acumula entrega a entrega, cierra el PO solo cuando llega todo',
+            'Con muchos POs abiertos, filtra candidatos por número de parte o tracking',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Etapa 4 · Cierre de venta',
+          items: [
+            'Lista las Sales Orders pendientes de cierre',
+            'Marca la SO como entregada (Shipped)',
+            'Marca la SO como facturada (Invoiced)',
+            'Con ambas: cierra la SO (Closed — Shipped and Invoiced)',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Siempre disponible',
+          items: [
+            'Estado operativo: muestra en qué etapa está cada SO / PO y qué falta para cerrar',
+            'Ajuste automático de stock en catálogo al confirmar cada recepción',
+            'Marca si una SO ya fue comprada (evita doble-compra)',
+            'Lee capturas de tiendas online con visión (order confirmations, checkout)',
+          ],
+        },
+      ],
+    },
   },
   pagos: {
     label: 'Pagos',
@@ -123,10 +195,72 @@ const TIPO_CONFIG: Record<string, TipoConfig> = {
       { key: 'seguimiento', label: 'Seguimiento / estatus', desc: 'Da seguimiento al estatus de la orden hasta que se cierra.' },
     ],
     fuentes: [
-      { icon: _DB,   name: '1CRM · Órdenes / Cuentas / Contactos' },
+      { icon: _DB,   name: '1CRM · Órdenes / Cuentas / Cotizaciones' },
       { icon: _MAIL, name: 'Gmail · ventas@mromasterpro.com' },
     ],
     conectado: ['1CRM', 'Gmail'],
+    inventario: {
+      entradas: [
+        { icon: '📄', label: 'PDF de orden de compra del cliente' },
+        { icon: '📊', label: 'Excel / Word con la orden del cliente' },
+        { icon: '📷', label: 'Imagen / escaneado del PO (visión)' },
+        { icon: '🔗', label: 'Link o texto con los datos del pedido' },
+      ],
+      etapas: [
+        {
+          titulo: 'Leer el PO del cliente',
+          items: [
+            'Lee el PO en cualquier formato: PDF digital, Excel, Word o imagen escaneada',
+            'Extrae: número de orden, cliente, productos, cantidades, precios y condiciones',
+            'Detecta si el PDF tiene texto o es escaneado y aplica visión automáticamente',
+            'Si el PDF tiene varias páginas (PO + cotización adjunta), toma solo las líneas del PO',
+          ],
+        },
+        {
+          titulo: 'Cotejo vs cotizaciones',
+          items: [
+            'Busca en 1CRM las cotizaciones abiertas del cliente',
+            'Cruza cada línea del PO contra las cotizaciones: precio, cantidad y número de parte',
+            'Marca coincidencias exactas, discrepancias de precio y productos sin match',
+            'Identifica la cotización de referencia; si abarca varias, tú eliges cuál usar',
+            'Reporta cotizaciones vencidas o cerradas sin forzar un match',
+          ],
+        },
+        {
+          titulo: 'Crear la Sales Order',
+          items: [
+            'Muestra un preview de la SO con precios, términos y totales antes de crear',
+            'Lee los términos de pago de la cuenta del cliente (payment_terms en 1CRM)',
+            'Crea la Sales Order en 1CRM ligada a la cotización correcta',
+            'Copia automáticamente las líneas y condiciones de la cotización a la SO',
+            'Guarda el PDF del PO como Documento en 1CRM, vinculado a la SO, con el número de orden como nombre',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Envío y stock',
+          items: [
+            'Registra el envío (shipping) y actualiza el stock disponible',
+            'Maneja tracking y estados de envío',
+          ],
+        },
+        {
+          titulo: 'Cierre de venta',
+          items: [
+            'Marca la SO como entregada y/o facturada',
+            'Cierra la SO en 1CRM (Closed — Shipped and Invoiced)',
+          ],
+          undo: true,
+        },
+        {
+          titulo: 'Siempre disponible',
+          items: [
+            'Da seguimiento al estatus de cualquier orden abierta',
+            'Responde preguntas sobre el estado de envío o facturación',
+          ],
+        },
+      ],
+    },
   },
 };
 TIPO_CONFIG.mensajeria = TIPO_CONFIG.correo;
@@ -236,6 +370,7 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
                 </div>
               ))}
             </div>
+            {cfg.inventario && <InventarioSection inventario={cfg.inventario} />}
           </Section>
           <Section title="Conectado">
             <div className="px-3 space-y-1">
@@ -278,6 +413,52 @@ export default function RightPanel({ visible, streamId, tipo }: RightPanelProps)
 // hace cada agente. Pensado tanto para el usuario (humano) como para otras IAs que en el futuro
 // coordinen/orquesten varios streams y necesiten saber, sin adivinar ni leer código, qué hace cada
 // uno. Colapsado por defecto para no ocupar espacio de forma permanente.
+function InventarioSection({ inventario }: { inventario: NonNullable<TipoConfig['inventario']> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-1 border-t border-brain-card">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-brain-card/40 transition-colors"
+      >
+        <span className="text-[9px] font-semibold text-[#555] uppercase tracking-widest">Qué puede hacer</span>
+        <ChevronDown className={`w-3 h-3 text-[#555] transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-3 animate-fade-in">
+          <div>
+            <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest mb-1.5">Entradas que acepta</p>
+            <div className="space-y-0.5">
+              {inventario.entradas.map((e, i) => (
+                <div key={i} className="flex items-start gap-1.5 text-[10px] text-[#777]">
+                  <span className="flex-shrink-0 leading-tight">{e.icon}</span>
+                  <span className="leading-snug">{e.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {inventario.etapas.map((etapa, i) => (
+            <div key={i}>
+              <div className="flex items-center gap-1.5 mb-1">
+                <p className="text-[9px] font-semibold text-[#555] uppercase tracking-widest">{etapa.titulo}</p>
+                {etapa.undo && <span className="text-[8px] text-[#444] border border-[#333] rounded px-1 py-px">↩ deshacer</span>}
+              </div>
+              <ul className="space-y-0.5">
+                {etapa.items.map((item, j) => (
+                  <li key={j} className="flex items-start gap-1.5 text-[10px] text-[#777]">
+                    <span className="flex-shrink-0 mt-[3px] w-1 h-1 rounded-full bg-[#444]" />
+                    <span className="leading-snug">{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QueHagoSection({ label, queHago, agentes }: { label: string; queHago: string; agentes: AgenteConfig[] }) {
   const [open, setOpen] = useState(false);
   return (
