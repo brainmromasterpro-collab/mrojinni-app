@@ -1723,9 +1723,13 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
               <div className="mt-1 space-y-0.5">
                 {g.links.map((l, i) => (
                   <div key={i} className="flex items-center gap-2 text-[11px]">
-                    <a href={l.url} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-brain-accent truncate max-w-[240px]">
-                      {l.nombre || l.url}
-                    </a>
+                    {l.url ? (
+                      <a href={l.url} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-brain-accent truncate max-w-[240px]">
+                        {l.nombre || l.url}
+                      </a>
+                    ) : (
+                      <span className="text-gray-600 truncate max-w-[240px]">{l.nombre}</span>
+                    )}
                     <span className="font-mono text-gray-500">{l.part_number}</span>
                     {l.match_parcial && (
                       <span className="px-1 py-0.5 rounded text-[10px] bg-brain-warning-bg text-amber-700">≈ verificar</span>
