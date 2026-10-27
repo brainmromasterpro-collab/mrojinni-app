@@ -689,6 +689,8 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
               yaConfirmadoPago={laterHasMarker('[PAGO_REGISTRADO]')}
               yaConfirmadoRecepcion={laterHasMarker('[PO_RECIBIDO]')}
               yaConfirmadoCierre={laterHasMarker('[SO_CERRADA_ETAPA4]')}
+              yaConfirmadoAlegraElegir={laterHasMarker('[ALEGRA_BORRADOR]')}
+              yaConfirmadoAlegraBorrador={laterHasMarker('[ALEGRA_CREADA]')}
               yaConfirmadoReceivingCotejo={laterHasMarker('[RECEIVING_ESTADO]') || laterHasMarker('[RECEIVING_RECEPCION]')}
               yaConfirmadoReceivingPendiente={laterHasMarker('[RECEIVING_CONFIRMADO]')}
               yaConfirmadoReceivingRecepcion={laterHasMarker('[RECEIVING_CONFIRMADO]')}
@@ -3010,6 +3012,183 @@ function ProductosPreviewWidget({ productos, onSendMessage }: { productos: ProdP
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// FACTURACIÓN CON ALEGRA (stream 'ordenes'): Sales Order de 1CRM → factura de venta en Alegra.
+// ─────────────────────────────────────────────────────────────
+interface AlegraSO { id: string; nombre: string; cliente?: string; so_number?: string | number; so_stage?: string }
+function AlegraElegirWidget({ data, streamId, yaConfirmado, onProcesando }: { data: { sos?: AlegraSO[] }; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const sos = data.sos || [];
+  const [sel, setSel] = useState('');
+  const [estado, setEstado] = useState<'idle' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  async function armar() {
+    if (!sel || !streamId) return;
+    setEstado('listo');
+    onProcesando?.('🧾 Armando el borrador de la factura…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Facturar en Alegra', procesado: false,
+      metadata: { alegra_action: 'borrador', so_id: sel },
+    });
+  }
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">🧾</span>
+        <span className="text-[12px] font-semibold text-gray-900">Facturar en Alegra</span>
+      </div>
+      <div className="px-4 py-2.5 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wider text-gray-600">¿Cuál Sales Order?</p>
+        {sos.length === 0 && <p className="text-[12px] text-gray-500">No hay Sales Orders abiertas.</p>}
+        {sos.map((so) => (
+          <label key={so.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
+            <input type="radio" name={`so-alegra-${streamId}`} checked={sel === so.id} disabled={estado !== 'idle'} onChange={() => setSel(so.id)} className="accent-brain-accent" />
+            <span className="text-gray-900 truncate">{so.so_number ? `#${so.so_number} · ` : ''}{so.nombre}</span>
+            <span className="text-gray-500 flex-shrink-0">{so.cliente}</span>
+          </label>
+        ))}
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha creado nada</span>
+        <button onClick={armar} disabled={!sel || estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          {estado === 'listo' ? 'Enviado ✓' : 'Armar borrador'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface AlegraLinea { nombre: string; referencia?: string; cantidad: number; precio: number; iva_pct?: number; descuento_pct?: number; clave_sat?: string }
+interface AlegraBorrador {
+  so_id: string; so_nombre?: string; so_numero?: string | number; so_url?: string; po_cliente?: string;
+  cliente: { nombre: string; rfc?: string; regimeClient?: string; regimen_1crm?: string; email?: string; cp?: string; alegra_id?: string };
+  moneda?: string; fecha?: string; vence?: string; terminos?: string; paymentType?: string; paymentMethod?: string; cfdiUse?: string;
+  lineas: AlegraLinea[]; subtotal?: number; iva?: number; total?: number; avisos?: string[]; timbrable?: boolean;
+  cuenta_alegra?: { empresa?: string; timbrado_listo?: boolean; faltan_para_timbrar?: string[] };
+  error?: string;
+}
+const CFDI_USOS = [['G01', 'G01 · Adquisición de mercancías'], ['G03', 'G03 · Gastos en general'], ['I01', 'I01 · Construcciones'],
+  ['I04', 'I04 · Equipo de cómputo'], ['I08', 'I08 · Otra maquinaria y equipo'], ['D01', 'D01 · Honorarios médicos'], ['S01', 'S01 · Sin efectos fiscales']];
+function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { data: AlegraBorrador; streamId?: string; yaConfirmado?: boolean; onProcesando?: (text: string) => void }) {
+  const [cfdiUse, setCfdiUse] = useState(data.cfdiUse || 'G03');
+  const [lineas, setLineas] = useState<AlegraLinea[]>(() => data.lineas.map((l) => ({ ...l, clave_sat: l.clave_sat || '01010101' })));
+  const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const money = (n?: number) => (n === undefined || n === null) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  const inp = 'bg-white border border-brain-border rounded px-1.5 py-1 text-[11px] text-gray-900 focus:outline-none focus:border-brain-accent';
+  async function crear(timbrar: boolean) {
+    if (!streamId) return;
+    setEstado('creando');
+    onProcesando?.(timbrar ? '🧾 Creando y timbrando la factura en Alegra…' : '🧾 Creando el borrador en Alegra…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: timbrar ? 'Crear y timbrar factura en Alegra' : 'Crear borrador de factura en Alegra',
+      procesado: false,
+      metadata: { alegra_action: 'crear', timbrar, draft: { ...data, cfdiUse, lineas } },
+    });
+    setEstado('listo');
+  }
+  if (data.error) return <div className="bg-white border border-brain-border rounded-xl px-4 py-2.5 text-[12px] text-brain-error">{data.error}</div>;
+  const c = data.cliente;
+  return (
+    <div className="bg-white border border-brain-border rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-brain-border flex items-center gap-2">
+        <span className="text-[13px]">🧾</span>
+        <span className="text-[12px] font-semibold text-gray-900">Factura para Alegra</span>
+        <a href={data.so_url} target="_blank" rel="noreferrer" className="ml-auto text-[11px] text-brain-accent hover:underline">SO #{data.so_numero} →</a>
+      </div>
+      <div className="px-4 py-3 text-[11px] space-y-3">
+        <div className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 items-center">
+          <span className="text-gray-500">Cliente</span>
+          <span className="text-gray-900">{c.nombre} {c.alegra_id ? <span className="text-gray-500">· ya existe en Alegra</span> : <span className="text-gray-500">· se dará de alta en Alegra</span>}</span>
+          <span className="text-gray-500">RFC</span><span className="text-gray-900">{c.rfc || '—'}</span>
+          <span className="text-gray-500">Régimen fiscal</span><span className="text-gray-900">{c.regimen_1crm || '—'}{c.regimeClient ? ` (${c.regimeClient})` : ''}</span>
+          <span className="text-gray-500">C.P. fiscal</span><span className="text-gray-900">{c.cp || '—'}</span>
+          <span className="text-gray-500">PO del cliente</span><span className="text-gray-900">{data.po_cliente || '—'}</span>
+          <span className="text-gray-500">Fecha / vence</span><span className="text-gray-900">{data.fecha} → {data.vence} <span className="text-gray-500">({data.terminos || 'contado'})</span></span>
+          <span className="text-gray-500">Pago</span><span className="text-gray-900">{data.paymentType === 'PUE' ? 'PUE · una sola exhibición' : 'PPD · diferido / parcialidades'}</span>
+          <span className="text-gray-500">Uso de CFDI</span>
+          <select className={inp} value={cfdiUse} disabled={estado !== 'idle'} onChange={(e) => setCfdiUse(e.target.value)}>
+            {CFDI_USOS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+          <span className="text-gray-500">Moneda</span><span className="text-gray-900">{data.moneda}</span>
+        </div>
+        <div>
+          <div className="grid grid-cols-[1fr_90px_44px_80px_80px] gap-1.5 text-[10px] text-gray-500 mb-1">
+            <span>Producto</span><span>Clave SAT</span><span>Cant.</span><span>Precio u.</span><span className="text-right">Importe</span>
+          </div>
+          {lineas.map((l, i) => (
+            <div key={i} className="grid grid-cols-[1fr_90px_44px_80px_80px] gap-1.5 items-center mb-1">
+              <span className="text-gray-900 truncate" title={l.nombre}>{l.nombre}</span>
+              <input className={`${inp} font-mono`} value={l.clave_sat} disabled={estado !== 'idle'}
+                onChange={(e) => setLineas((prev) => prev.map((x, j) => j === i ? { ...x, clave_sat: e.target.value } : x))} />
+              <span className="text-gray-700">{l.cantidad}</span>
+              <span className="text-gray-700">{money(l.precio)}</span>
+              <span className="text-right text-gray-900">{money(l.cantidad * l.precio)}</span>
+            </div>
+          ))}
+          <div className="mt-1 pt-1 border-t border-brain-border space-y-0.5 text-right text-gray-700">
+            <div>Subtotal {money(data.subtotal)}</div><div>IVA {money(data.iva)}</div>
+            <div className="text-gray-900 font-semibold">Total {money(data.total)} {data.moneda}</div>
+          </div>
+        </div>
+        {(data.avisos?.length || data.cuenta_alegra?.faltan_para_timbrar?.length) ? (
+          <div className="rounded-lg bg-brain-warning-bg px-3 py-2 text-amber-700 space-y-0.5">
+            {(data.avisos || []).map((a, i) => <p key={i}>⚠ {a}</p>)}
+            {(data.cuenta_alegra?.faltan_para_timbrar || []).map((a, i) => <p key={`f${i}`}>⚠ En Alegra falta: {a}.</p>)}
+            <p className="text-amber-700/80">La clave SAT 01010101 es genérica: pon la real de cada producto antes de timbrar.</p>
+          </div>
+        ) : null}
+        <p className="text-gray-500">Se crea primero como <span className="text-gray-700">borrador en Alegra</span> (reversible). Timbrar es un paso aparte y solo se habilita cuando no falta ningún dato fiscal.</p>
+      </div>
+      <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
+        <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en Alegra</span>
+        <button onClick={() => crear(false)} disabled={estado !== 'idle'}
+          className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-700 border border-brain-border hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Crear borrador'}
+        </button>
+        <button onClick={() => crear(true)} disabled={estado !== 'idle' || !data.timbrable}
+          title={data.timbrable ? '' : 'Faltan datos fiscales (ver avisos)'}
+          className="px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
+          Crear y timbrar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface AlegraCreada { ok?: boolean; error?: string; invoice_id?: string; estado?: string; numero?: string; total?: number; url?: string; cliente?: string; timbrada?: boolean; cliente_nuevo?: boolean; aviso?: string }
+function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCreada; streamId?: string; onProcesando?: (text: string) => void }) {
+  const [deshecho, setDeshecho] = useState(false);
+  async function deshacer() {
+    if (!streamId || !data.invoice_id) return;
+    setDeshecho(true);
+    onProcesando?.('↩️ Eliminando el borrador de Alegra…');
+    await supabase.from('mensajes').insert({
+      stream_id: streamId, role: 'user', content: 'Deshacer factura en Alegra', procesado: false,
+      metadata: { alegra_action: 'deshacer', invoice_id: data.invoice_id },
+    });
+  }
+  return (
+    <div className="bg-white border border-brain-success/30 rounded-xl overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <span>{data.ok ? '✅' : '⚠️'}</span>
+        <span className="text-[13px] font-semibold text-gray-900">{data.ok ? (data.timbrada ? 'Factura timbrada en Alegra' : 'Borrador creado en Alegra') : 'No se pudo crear la factura'}</span>
+      </div>
+      <div className="px-4 pb-3 text-[12px] text-gray-700 space-y-1">
+        {data.ok ? (
+          <>
+            <p>{data.cliente} · {data.total !== undefined && `$${Number(data.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} · estado: {data.estado}{data.cliente_nuevo ? ' · cliente dado de alta' : ''}</p>
+            {data.aviso && <p className="text-amber-700">⚠ {data.aviso}</p>}
+            <div className="flex items-center gap-3">
+              {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Ver en Alegra →</a>}
+              {data.estado === 'draft' && (deshecho ? <span className="ml-auto text-[11px] text-gray-500">Deshecho</span>
+                : <button onClick={deshacer} className="ml-auto text-[11px] text-brain-error">Deshacer (eliminar borrador)</button>)}
+            </div>
+          </>
+        ) : <p className="text-brain-error">{data.error}</p>}
+      </div>
+    </div>
+  );
+}
+
 interface MessageBubbleProps {
   message: Message;
   onSendMessage?: (text: string) => void;
@@ -3019,13 +3198,15 @@ interface MessageBubbleProps {
   yaConfirmadoPago?: boolean;
   yaConfirmadoRecepcion?: boolean;
   yaConfirmadoCierre?: boolean;
+  yaConfirmadoAlegraElegir?: boolean;
+  yaConfirmadoAlegraBorrador?: boolean;
   yaConfirmadoReceivingCotejo?: boolean;
   yaConfirmadoReceivingPendiente?: boolean;
   yaConfirmadoReceivingRecepcion?: boolean;
   yaConfirmadoShippingCotejo?: boolean;
   yaConfirmadoShippingForm?: boolean;
 }
-function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente, yaConfirmadoReceivingRecepcion, yaConfirmadoShippingCotejo, yaConfirmadoShippingForm }: MessageBubbleProps) {
+function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, yaConfirmadoPO, yaConfirmadoPago, yaConfirmadoRecepcion, yaConfirmadoCierre, yaConfirmadoAlegraElegir, yaConfirmadoAlegraBorrador, yaConfirmadoReceivingCotejo, yaConfirmadoReceivingPendiente, yaConfirmadoReceivingRecepcion, yaConfirmadoShippingCotejo, yaConfirmadoShippingForm }: MessageBubbleProps) {
   const contenido = message.contenido as { text?: string };
   const isUser = message.rol === 'user';
   const [decided, setDecided] = useState<string | null>(null);
@@ -3081,6 +3262,12 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const cotejoRecepcionData: CotejoRecepcionData | null = cotejoRecepcionRes?.json || null;
   const poRecibidoRes = extractMarkerJson(rawText, '[PO_RECIBIDO]');
   const poRecibidoData = (poRecibidoRes?.json || null) as { ok?: boolean; error?: string; po_url?: string } | null;
+  const alegraElegirRes = extractMarkerJson(rawText, '[ALEGRA_ELEGIR]');
+  const alegraElegirData = (alegraElegirRes?.json || null) as { sos?: AlegraSO[] } | null;
+  const alegraBorradorRes = extractMarkerJson(rawText, '[ALEGRA_BORRADOR]');
+  const alegraBorradorData: AlegraBorrador | null = alegraBorradorRes?.json || null;
+  const alegraCreadaRes = extractMarkerJson(rawText, '[ALEGRA_CREADA]');
+  const alegraCreadaData: AlegraCreada | null = alegraCreadaRes?.json || null;
   const cotejoCierreRes = extractMarkerJson(rawText, '[COTEJO_CIERRE]');
   const cotejoCierreData = (cotejoCierreRes?.json || null) as { candidatos?: SOCandidata[] } | null;
   const soCerradaEtapa4Res = extractMarkerJson(rawText, '[SO_CERRADA_ETAPA4]');
@@ -3125,6 +3312,9 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (pagoRegistradoRes) displayText = displayText.replace(pagoRegistradoRes.raw, '').trimEnd();
   if (cotejoRecepcionRes) displayText = displayText.replace(cotejoRecepcionRes.raw, '').trimEnd();
   if (poRecibidoRes) displayText = displayText.replace(poRecibidoRes.raw, '').trimEnd();
+  if (alegraElegirRes) displayText = displayText.replace(alegraElegirRes.raw, '').trimEnd();
+  if (alegraBorradorRes) displayText = displayText.replace(alegraBorradorRes.raw, '').trimEnd();
+  if (alegraCreadaRes) displayText = displayText.replace(alegraCreadaRes.raw, '').trimEnd();
   if (cotejoCierreRes) displayText = displayText.replace(cotejoCierreRes.raw, '').trimEnd();
   if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
   if (accionDeshechaRes) displayText = displayText.replace(accionDeshechaRes.raw, '').trimEnd();
@@ -3156,6 +3346,9 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {pagoRegistradoData && <PagoRegistradoWidget data={pagoRegistradoData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {cotejoRecepcionData && <CotejoRecepcionWidget data={cotejoRecepcionData} streamId={message.stream_id} yaConfirmado={yaConfirmadoRecepcion} onProcesando={onProcesando} />}
         {poRecibidoData && <PORecibidoWidget data={poRecibidoData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {alegraElegirData && <AlegraElegirWidget data={alegraElegirData} streamId={message.stream_id} yaConfirmado={yaConfirmadoAlegraElegir} onProcesando={onProcesando} />}
+        {alegraBorradorData && <AlegraBorradorWidget data={alegraBorradorData} streamId={message.stream_id} yaConfirmado={yaConfirmadoAlegraBorrador} onProcesando={onProcesando} />}
+        {alegraCreadaData && <AlegraCreadaWidget data={alegraCreadaData} streamId={message.stream_id} onProcesando={onProcesando} />}
         {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} onProcesando={onProcesando} />}
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
         {receivingCotejoData && <ReceivingCotejoWidget data={receivingCotejoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingCotejo} onProcesando={onProcesando} />}
