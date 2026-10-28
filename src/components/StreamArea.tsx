@@ -3136,7 +3136,7 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
             <p className="text-amber-700/80">La clave SAT 01010101 es genérica: pon la real de cada producto antes de timbrar.</p>
           </div>
         ) : null}
-        <p className="text-gray-500">Se crea primero como <span className="text-gray-700">borrador en Alegra</span> (reversible). Timbrar es un paso aparte y solo se habilita cuando no falta ningún dato fiscal.</p>
+        <p className="text-gray-500">Se crea primero como <span className="text-gray-700">borrador en Alegra</span> (reversible) y se genera la <span className="text-gray-700">Invoice en 1CRM</span> ligada a la SO; los cobros de Alegra se registran solos en 1CRM. Timbrar es un paso aparte y solo se habilita cuando no falta ningún dato fiscal.</p>
       </div>
       <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en Alegra</span>
@@ -3154,7 +3154,7 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
   );
 }
 
-interface AlegraCreada { ok?: boolean; error?: string; invoice_id?: string; estado?: string; numero?: string; total?: number; url?: string; cliente?: string; timbrada?: boolean; cliente_nuevo?: boolean; aviso?: string }
+interface AlegraCreada { ok?: boolean; error?: string; invoice_id?: string; estado?: string; numero?: string; total?: number; url?: string; cliente?: string; timbrada?: boolean; cliente_nuevo?: boolean; aviso?: string; crm_invoice?: { ok?: boolean; id?: string; url?: string; error?: string; numero?: string | number } }
 function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCreada; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
@@ -3163,7 +3163,7 @@ function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCrea
     onProcesando?.('↩️ Eliminando el borrador de Alegra…');
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Deshacer factura en Alegra', procesado: false,
-      metadata: { alegra_action: 'deshacer', invoice_id: data.invoice_id },
+      metadata: { alegra_action: 'deshacer', invoice_id: data.invoice_id, crm_invoice_id: data.crm_invoice?.id || '' },
     });
   }
   return (
@@ -3177,14 +3177,48 @@ function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCrea
           <>
             <p>{data.cliente} · {data.total !== undefined && `$${Number(data.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} · estado: {data.estado}{data.cliente_nuevo ? ' · cliente dado de alta' : ''}</p>
             {data.aviso && <p className="text-amber-700">⚠ {data.aviso}</p>}
+            {data.crm_invoice && !data.crm_invoice.ok && <p className="text-amber-700">⚠ No se creó la Invoice en 1CRM: {data.crm_invoice.error}</p>}
             <div className="flex items-center gap-3">
               {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Ver en Alegra →</a>}
+              {data.crm_invoice?.ok && data.crm_invoice.url && <a href={data.crm_invoice.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Invoice en 1CRM →</a>}
               {data.estado === 'draft' && (deshecho ? <span className="ml-auto text-[11px] text-gray-500">Deshecho</span>
                 : <button onClick={deshacer} className="ml-auto text-[11px] text-brain-error">Deshacer (eliminar borrador)</button>)}
             </div>
           </>
         ) : <p className="text-brain-error">{data.error}</p>}
       </div>
+    </div>
+  );
+}
+
+interface AlegraCobro { alegra_id?: string; numero?: string; cliente?: string; monto?: number; pagado?: number; total?: number; saldo?: number; payment_url?: string; invoice_url?: string; url?: string }
+function AlegraCobroWidget({ data }: { data: AlegraCobro }) {
+  const m = (n?: number) => (n === undefined || n === null) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
+  return (
+    <div className="bg-white border border-brain-success/30 rounded-xl px-4 py-2.5">
+      <p className="text-[13px] font-semibold text-gray-900">💰 Cobro en Alegra · {m(data.monto)}</p>
+      <p className="text-[12px] text-gray-700">{data.cliente} · factura {data.numero || data.alegra_id} · cobrado {m(data.pagado)} de {m(data.total)} · saldo {m(data.saldo)}</p>
+      <div className="flex items-center gap-3 text-[12px] mt-0.5">
+        <span className="text-gray-500">Registrado en 1CRM</span>
+        {data.payment_url && <a href={data.payment_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Pago →</a>}
+        {data.invoice_url && <a href={data.invoice_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Invoice →</a>}
+        {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Alegra →</a>}
+      </div>
+    </div>
+  );
+}
+
+interface AlegraEstatus { alegra_id?: string; evento?: string; numero?: string; cliente?: string; uuid?: string | null; url?: string }
+function AlegraEstatusWidget({ data }: { data: AlegraEstatus }) {
+  const anulada = data.evento === 'anulada';
+  return (
+    <div className={`bg-white border rounded-xl px-4 py-2.5 ${anulada ? 'border-brain-error/30' : 'border-brain-success/30'}`}>
+      <p className="text-[13px] font-semibold text-gray-900">{anulada ? '🚫 Factura anulada en Alegra' : '🧾 Factura emitida en Alegra'}</p>
+      <p className="text-[12px] text-gray-700">
+        {data.cliente} · {data.numero || data.alegra_id}{data.uuid ? ` · UUID ${data.uuid}` : ''}
+        {anulada ? ' · la Invoice de 1CRM quedó cancelada' : ' · Sales Order marcada como facturada'}
+      </p>
+      {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="text-[12px] text-brain-accent hover:underline">Ver en Alegra →</a>}
     </div>
   );
 }
@@ -3268,6 +3302,10 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   const alegraBorradorData: AlegraBorrador | null = alegraBorradorRes?.json || null;
   const alegraCreadaRes = extractMarkerJson(rawText, '[ALEGRA_CREADA]');
   const alegraCreadaData: AlegraCreada | null = alegraCreadaRes?.json || null;
+  const alegraCobroRes = extractMarkerJson(rawText, '[ALEGRA_COBRO]');
+  const alegraCobroData: AlegraCobro | null = alegraCobroRes?.json || null;
+  const alegraEstatusRes = extractMarkerJson(rawText, '[ALEGRA_ESTATUS]');
+  const alegraEstatusData: AlegraEstatus | null = alegraEstatusRes?.json || null;
   const cotejoCierreRes = extractMarkerJson(rawText, '[COTEJO_CIERRE]');
   const cotejoCierreData = (cotejoCierreRes?.json || null) as { candidatos?: SOCandidata[] } | null;
   const soCerradaEtapa4Res = extractMarkerJson(rawText, '[SO_CERRADA_ETAPA4]');
@@ -3315,6 +3353,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
   if (alegraElegirRes) displayText = displayText.replace(alegraElegirRes.raw, '').trimEnd();
   if (alegraBorradorRes) displayText = displayText.replace(alegraBorradorRes.raw, '').trimEnd();
   if (alegraCreadaRes) displayText = displayText.replace(alegraCreadaRes.raw, '').trimEnd();
+  if (alegraCobroRes) displayText = displayText.replace(alegraCobroRes.raw, '').trimEnd();
+  if (alegraEstatusRes) displayText = displayText.replace(alegraEstatusRes.raw, '').trimEnd();
   if (cotejoCierreRes) displayText = displayText.replace(cotejoCierreRes.raw, '').trimEnd();
   if (soCerradaEtapa4Res) displayText = displayText.replace(soCerradaEtapa4Res.raw, '').trimEnd();
   if (accionDeshechaRes) displayText = displayText.replace(accionDeshechaRes.raw, '').trimEnd();
@@ -3349,6 +3389,8 @@ function MessageBubble({ message, onSendMessage, onProcesando, yaConfirmadoSO, y
         {alegraElegirData && <AlegraElegirWidget data={alegraElegirData} streamId={message.stream_id} yaConfirmado={yaConfirmadoAlegraElegir} onProcesando={onProcesando} />}
         {alegraBorradorData && <AlegraBorradorWidget data={alegraBorradorData} streamId={message.stream_id} yaConfirmado={yaConfirmadoAlegraBorrador} onProcesando={onProcesando} />}
         {alegraCreadaData && <AlegraCreadaWidget data={alegraCreadaData} streamId={message.stream_id} onProcesando={onProcesando} />}
+        {alegraCobroData && <AlegraCobroWidget data={alegraCobroData} />}
+        {alegraEstatusData && <AlegraEstatusWidget data={alegraEstatusData} />}
         {cotejoCierreData && <CotejoCierreWidget data={cotejoCierreData} streamId={message.stream_id} yaConfirmado={yaConfirmadoCierre} onProcesando={onProcesando} />}
         {soCerradaEtapa4Data && <SOCerradaEtapa4Widget data={soCerradaEtapa4Data} streamId={message.stream_id} onProcesando={onProcesando} />}
         {receivingCotejoData && <ReceivingCotejoWidget data={receivingCotejoData} streamId={message.stream_id} yaConfirmado={yaConfirmadoReceivingCotejo} onProcesando={onProcesando} />}
