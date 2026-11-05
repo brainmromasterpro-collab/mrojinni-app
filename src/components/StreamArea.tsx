@@ -1,3 +1,4 @@
+import { widgetPermitido } from '../lib/streamContracts';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Paperclip, Mic, Image as ImageIcon, Search, PackageCheck, Radio, UserCheck, Keyboard, X, RotateCcw, Square, Upload, FileText, Check } from 'lucide-react';
 import type { Message, Stream } from '../lib/types';
@@ -635,6 +636,11 @@ export default function StreamArea({ stream, messages, bulkRfqIds, onActiveBulkI
         <div className="max-w-3xl mx-auto px-6 space-y-4">
           {messages.map((msg, msgIdx) => {
             if (msg.tipo === 'rfq-form') {
+              return null;
+            }
+            // CONTRATO DEL STREAM: un widget de otro proceso no se dibuja aquí (ver lib/streamContracts.ts).
+            if (!widgetPermitido(stream?.tipo, msg.tipo)) {
+              console.warn(`[BARRERA] widget '${msg.tipo}' no pertenece a un stream tipo '${stream?.tipo}' — no se dibuja`);
               return null;
             }
 

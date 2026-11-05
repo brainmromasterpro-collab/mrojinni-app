@@ -1,3 +1,4 @@
+import { puedeCrearRFQCatalogo } from './lib/streamContracts';
 import { useState, useCallback, useRef, useEffect } from 'react';
 //
 import TopBar from './components/TopBar';
@@ -657,7 +658,7 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
     // BARRERA: la búsqueda de producto/proveedores (RFQ de catálogo) SOLO se crea desde los streams de
     // búsqueda. En cualquier otro (Oportunidad, Correo, Productos, Compras...) se mezclaría un proceso con otro.
     const tipoActual = activeStream?.tipo || '';
-    if (!['busquedas', 'catalogo', 'generico'].includes(tipoActual)) {
+    if (!puedeCrearRFQCatalogo(tipoActual)) {
       console.warn(`[BARRERA] createRFQAndSearch bloqueado en stream tipo=${tipoActual}`);
       setMessages((prev) => [...prev, {
         id: crypto.randomUUID(),
