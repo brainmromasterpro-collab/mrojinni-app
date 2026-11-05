@@ -654,6 +654,22 @@ function AppContent({ equipo, streamIdsPermitidos }: { equipo: boolean; streamId
   async function createRFQAndSearch(marca: string, modelo: string, qty: number, urgente: boolean, fotoUrl?: string, bulkId?: string) {
     if (!activeStreamId) return;
 
+    // BARRERA: la búsqueda de producto/proveedores (RFQ de catálogo) SOLO se crea desde los streams de
+    // búsqueda. En cualquier otro (Oportunidad, Correo, Productos, Compras...) se mezclaría un proceso con otro.
+    const tipoActual = activeStream?.tipo || '';
+    if (!['busquedas', 'catalogo', 'generico'].includes(tipoActual)) {
+      console.warn(`[BARRERA] createRFQAndSearch bloqueado en stream tipo=${tipoActual}`);
+      setMessages((prev) => [...prev, {
+        id: crypto.randomUUID(),
+        stream_id: activeStreamId,
+        rol: 'assistant',
+        tipo: 'text',
+        contenido: { text: 'La búsqueda de producto y proveedores se hace en el stream «Buscar prods». Aquí no la ejecuté para no mezclar procesos.' },
+        created_at: new Date().toISOString(),
+      }]);
+      return;
+    }
+
     const searchKey = `${marca.toLowerCase().trim()}|${modelo.toLowerCase().trim()}`;
     const lastSearch = recentSearchesRef.current.get(searchKey);
     if (lastSearch && Date.now() - lastSearch < 300000) return;
