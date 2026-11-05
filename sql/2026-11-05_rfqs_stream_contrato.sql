@@ -27,7 +27,7 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;  -- lee streams sin depender de RLS del que inserta
 
 DROP TRIGGER IF EXISTS rfqs_stream_contrato ON rfqs;
 CREATE TRIGGER rfqs_stream_contrato
