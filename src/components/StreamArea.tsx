@@ -1240,7 +1240,7 @@ interface CotejoProveedorLink {
 interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
   cliente?: string; currency_id?: string; moneda_codigo?: string; moneda_so_id?: string;
-  monedas_opciones?: { id: string; codigo: string; nombre: string }[]; terminos_pago?: string; terminos_origen?: string; sin_terminos_pago?: boolean;
+  monedas_opciones?: { id: string; codigo: string; nombre: string }[]; terminos_pago?: string; terminos_origen?: string; terminos_documento?: string; proveedor_documento?: string; proveedor_leido?: string; sin_terminos_pago?: boolean;
   tax_code_id?: string;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
@@ -1668,6 +1668,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
       return {
         so_id: g.so_id, proveedor_nombre: e.proveedor, currency_id: e.currency_id,
         terminos_pago: g.terminos_pago, tax_code_id: g.tax_code_id,
+        terminos_documento: g.terminos_documento || '', proveedor_documento: g.proveedor_documento || '',
         lineas: e.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
       };
     });
@@ -1725,8 +1726,13 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                 )}
               </div>
               <p className="text-[11px] text-gray-500 mt-0.5">
-                {g.terminos_pago && <span>Términos <span className="text-gray-700">{g.terminos_pago}</span>{' (del proveedor)'}</span>}
+                {g.terminos_pago && <span>Términos <span className="text-gray-700">{g.terminos_pago}</span>{g.terminos_origen === 'documento' ? ' (según el documento del proveedor; el proveedor aún no los tiene en 1CRM)' : ' (del proveedor)'}</span>}
               </p>
+              {g.proveedor_leido && (
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  El documento dice «{g.proveedor_leido}»; usé la cuenta de proveedor «{g.proveedor_nombre}» que ya tienes en 1CRM (cámbiala abajo si no es).
+                </p>
+              )}
               {g.sin_terminos_pago && (
                 <p className="text-[11px] text-brain-error mt-0.5">
                   ⚠ El proveedor no tiene Condiciones de pago configuradas en 1CRM (campo obligatorio) —
@@ -1769,7 +1775,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                     {(g.monedas_opciones || []).map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nombre}</option>)}
                   </select>
                   <span className="text-gray-500">Condiciones</span>
-                  <span className="text-gray-900">{g.terminos_pago || '—'} <span className="text-gray-500">(del proveedor; si cambias el proveedor se releen al crear)</span></span>
+                  <span className="text-gray-900">{g.terminos_pago || '—'} <span className="text-gray-500">({g.terminos_origen === 'documento' ? 'según el documento del proveedor' : 'del proveedor'}; si cambias el proveedor se releen al crear)</span></span>
                   <span className="text-gray-500">Ligado a</span>
                   <a href={g.so_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">{g.so_nombre} · #{g.so_numero} — {g.cliente}</a>
                   <span className="text-gray-500">Estado</span>
