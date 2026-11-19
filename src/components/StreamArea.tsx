@@ -1575,7 +1575,10 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
                 );
               })()}
               {draft.aviso_vigencia && draft.puede_crear && (
-                <p className="text-[11px] text-amber-700">⚠ Esta cotización está vencida o no vigente; la elegiste tú, se crea de todos modos al confirmar.</p>
+                <p className="text-[11px] text-amber-700">⚠ Esta cotización está vencida o no vigente; se crea de todos modos solo si confirmas aquí.</p>
+              )}
+              {draft.file_url && (
+                <p className="text-[11px] text-gray-600">📎 El PO original se guardará en Documentos de 1CRM, ligado a la SO y en su campo «SalesOrder».</p>
               )}
               {!draft.puede_crear && (
                 <p className="text-[11px] text-amber-700">
