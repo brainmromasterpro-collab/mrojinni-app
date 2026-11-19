@@ -1271,7 +1271,9 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
   const po = data.po || {};
   const c = data.cotejo || {};
   const draft = c.so_draft || null;
-  const [showPrev, setShowPrev] = useState(!!data.cotejo?.forzada);
+  // El previo de lo que se va a crear se muestra abierto desde el principio siempre que haya borrador: el usuario
+  // debe ver y aprobar lo que se guardará (antes solo se abría solo si había elegido la cotización a mano).
+  const [showPrev, setShowPrev] = useState(!!data.cotejo?.forzada || !!data.cotejo?.so_draft);
   type LineaEdit = { precio: string; descripcion: string; mfr: string; cantidad: string };
   const [edits, setEdits] = useState<Record<string, LineaEdit>>(() => Object.fromEntries(
     (data.cotejo?.so_draft?.lineas || []).map((l) => [l.part_number, {
@@ -1443,7 +1445,7 @@ function CotejoPOWidget({ data, streamId, yaConfirmado, onProcesando }: { data: 
           <p className="text-[10px] uppercase tracking-wider text-gray-600 mb-1.5">
             {c.ambiguo ? '¿Cuál cotización es?' : 'Cotización de referencia (candidatas)'}
           </p>
-          {c.ambiguo && <p className="text-[11px] text-amber-700 mb-1.5">Ninguna coincide exacto en parte y precio. Te las muestro de mayor a menor coincidencia — elige una para convertirla en Sales Order.</p>}
+          {c.ambiguo && <p className="text-[11px] text-amber-700 mb-1.5">Hay más de una cotización posible y ninguna es claramente la única que coincide en parte y precio. Te las muestro de mayor a menor coincidencia — elige una para convertirla en Sales Order.</p>}
           <div className="space-y-1">
             {cands.map((q) => (
               <label key={q.id} className={`flex items-center gap-2 text-[12px] ${c.ambiguo ? 'cursor-pointer' : ''}`}>
