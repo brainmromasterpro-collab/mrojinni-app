@@ -1954,6 +1954,9 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
         <p className="text-[10px] uppercase tracking-wider text-gray-600">
           {sinMatch ? 'Sin match exacto por monto — elige una manualmente, o registra como algo nuevo' : '¿A cuál cuenta corresponde?'}
         </p>
+        {typeof comp.monto === 'number' && !comp.moneda && (
+          <p className="text-[11px] text-amber-700">⚠ No pude leer la moneda del comprobante (MXN, USD o EUR). Verifica que coincida con la de la cuenta que elijas.</p>
+        )}
         {cands.length === 0 && <p className="text-[12px] text-gray-500">No hay cuentas abiertas.</p>}
         {cands.map((b) => (
           <label key={b.id} className="flex items-center gap-2 text-[12px] cursor-pointer">
