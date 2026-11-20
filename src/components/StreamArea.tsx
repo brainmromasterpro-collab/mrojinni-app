@@ -1889,7 +1889,7 @@ function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?:
 // ─────────────────────────────────────────────────────────────
 // ETAPA 2 — PAGOS: comprobante leído → elegir la Bill correcta → registrar Payment
 // ─────────────────────────────────────────────────────────────
-interface BillCandidata { id: string; tipo?: 'bill' | 'invoice'; direccion?: 'outgoing' | 'incoming'; nombre: string; amount_due: number; currency_id?: string; cuenta?: string; proveedor?: string; url?: string; completo?: boolean }
+interface BillCandidata { id: string; tipo?: 'bill' | 'invoice'; direccion?: 'outgoing' | 'incoming'; nombre: string; amount_due: number; currency_id?: string; cuenta?: string; proveedor?: string; url?: string; completo?: boolean; moneda?: string; moneda_coincide?: boolean; excede?: number }
 interface CotejoPagoData {
   comprobante?: { monto?: number | null; moneda?: string; fecha?: string; referencia?: string; notas?: string; error?: string };
   cotejo?: { candidatas?: BillCandidata[]; multiples?: boolean; por_monto?: boolean };
@@ -1963,10 +1963,13 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
             </span>
             <span className="text-gray-900">{b.nombre}</span>
             <span className="text-gray-500">{b.cuenta || b.proveedor}</span>
-            <span className="ml-auto text-gray-600">{money(b.amount_due)} pendiente</span>
-            {typeof comp.monto === 'number' && (
-              <span className={`text-[10px] ${b.completo ? 'text-brain-success' : 'text-amber-700'}`}>
-                {b.completo ? 'cubre el total' : `parcial — quedan ${money(b.amount_due - comp.monto)}`}
+            <span className="ml-auto text-gray-600">{money(b.amount_due)} {b.moneda} pendiente</span>
+            {b.moneda_coincide === false && (
+              <span className="text-[10px] text-brain-error">⚠ moneda distinta (comprobante {comp.moneda}, cuenta {b.moneda})</span>
+            )}
+            {typeof comp.monto === 'number' && b.moneda_coincide !== false && (
+              <span className={`text-[10px] ${b.excede ? 'text-brain-error' : b.completo ? 'text-brain-success' : 'text-amber-700'}`}>
+                {b.excede ? `⚠ excede el saldo por ${money(b.excede)}` : b.completo ? 'cubre el total' : `parcial — quedan ${money(b.amount_due - comp.monto)}`}
               </span>
             )}
           </label>
@@ -1991,7 +1994,8 @@ function CotejoPagoWidget({ data, streamId, yaConfirmado, onProcesando }: { data
             Ninguna coincide
           </button>
         )}
-        <button onClick={confirmar} disabled={!sel || estado !== 'idle'}
+        <button onClick={confirmar} disabled={!sel || estado !== 'idle' || seleccionada?.moneda_coincide === false}
+          title={seleccionada?.moneda_coincide === false ? 'La moneda del comprobante no coincide con la de la cuenta' : undefined}
           className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Registrando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : 'Confirmar pago'}
         </button>
