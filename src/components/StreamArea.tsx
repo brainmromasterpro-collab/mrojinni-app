@@ -2539,7 +2539,7 @@ function ReceivingPendienteWidget({ data, streamId, yaConfirmado, onProcesando }
   );
 }
 
-function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number> }; streamId?: string; onProcesando?: (text: string) => void }) {
+function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { ok?: boolean; error?: string; po_id?: string; po_url?: string; shipping_stage?: string; completo?: boolean; estado_anterior?: string; ajustes_stock?: AjusteStock[]; cantidades?: Record<string, number>; recepcion_id?: string }; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
     if (!streamId) return;
@@ -2547,7 +2547,7 @@ function ReceivingConfirmadoWidget({ data, streamId, onProcesando }: { data: { o
     onProcesando?.('↩️ Deshaciendo esta recepción…');
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: 'Deshacer recepción', procesado: false,
-      metadata: { receiving_action: 'deshacer', po_id: data.po_id, cantidades: data.cantidades || {}, estado_anterior: data.estado_anterior || '' },
+      metadata: { receiving_action: 'deshacer', po_id: data.po_id, cantidades: data.cantidades || {}, estado_anterior: data.estado_anterior || '', recepcion_id: data.recepcion_id || '' },
     });
   }
   return (
