@@ -1244,7 +1244,7 @@ interface CotejoProveedorGrupo {
   tax_code_id?: string; sin_moneda?: boolean; proveedor_extranjero?: boolean; iva_texto?: string; iva_incierto?: boolean;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
-  lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
+  lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number; piezas_por_paquete?: number; cantidad_so?: number | null }[];
   links: CotejoProveedorLink[];
 }
 interface CotejoProveedorData {
@@ -1641,7 +1641,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
   const money = (n?: number | string | null) =>
     (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
   // BORRADOR editable del PO por grupo: lo que el usuario ve aquí es exactamente lo que se crea.
-  type LineaDraft = { name: string; mfr_part_no?: string; quantity: number; unit_price?: number };
+  type LineaDraft = { name: string; mfr_part_no?: string; quantity: number; unit_price?: number; piezas_por_paquete?: number; cantidad_so?: number | null };
   type Edit = { proveedor: string; currency_id: string; lineas: LineaDraft[]; iva?: 'auto' | 'con' | 'sin' };
   const [edits, setEdits] = useState<Record<string, Edit>>(() => Object.fromEntries(
     grupos.map((g) => [g.so_id, { proveedor: g.proveedor_nombre || '', currency_id: g.currency_id || '',
@@ -1792,16 +1792,34 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                   <span className="text-gray-900">Ordered</span>
                 </div>
                 <div>
-                  <div className="grid grid-cols-[1fr_110px_56px_84px_84px] gap-1.5 text-[10px] text-gray-500 mb-1">
-                    <span>Producto</span><span>No. de parte</span><span>Cant.</span><span>Precio u.</span><span className="text-right">Importe</span>
+                  <div className="grid grid-cols-[1fr_110px_56px_60px_84px_84px] gap-1.5 text-[10px] text-gray-500 mb-1">
+                    <span>Producto</span><span>No. de parte</span><span>Cant. (paq.)</span><span>Pzs/paq</span><span>Precio u. (paq.)</span><span className="text-right">Importe</span>
                   </div>
                   {e.lineas.map((l, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_110px_56px_84px_84px] gap-1.5 items-center mb-1">
+                    <div key={i} className="mb-1"><div className="grid grid-cols-[1fr_110px_56px_60px_84px_84px] gap-1.5 items-center">
                       <input className={inp} value={l.name} onChange={(ev) => setLinea(g.so_id, i, { name: ev.target.value })} />
                       <input className={`${inp} font-mono`} value={l.mfr_part_no || ''} onChange={(ev) => setLinea(g.so_id, i, { mfr_part_no: ev.target.value })} />
                       <input className={inp} type="number" min={0} value={l.quantity} onChange={(ev) => setLinea(g.so_id, i, { quantity: Number(ev.target.value) })} />
+                      <input className={inp} type="number" min={1} step="1" value={l.piezas_por_paquete ?? 1} onChange={(ev) => setLinea(g.so_id, i, { piezas_por_paquete: Math.max(1, Math.floor(Number(ev.target.value) || 1)) })} />
                       <input className={inp} type="number" min={0} step="0.01" value={l.unit_price ?? 0} onChange={(ev) => setLinea(g.so_id, i, { unit_price: Number(ev.target.value) })} />
                       <span className="text-right text-gray-900">{money((Number(l.unit_price) || 0) * (Number(l.quantity) || 0))}</span>
+                    </div>
+                    {(() => {
+                      const paq = l.piezas_por_paquete ?? 1;
+                      const piezas = (Number(l.quantity) || 0) * paq;
+                      const pide = l.cantidad_so ?? null;
+                      if (paq <= 1 && pide === null) return null;
+                      const dif = pide === null ? 0 : piezas - pide;
+                      return (
+                        <p className={`text-[10px] mt-0.5 ${pide !== null && dif < 0 ? 'text-brain-error' : 'text-gray-500'}`}>
+                          = {piezas.toLocaleString('es-MX')} pzas {paq > 1 ? `(${l.quantity} × ${paq})` : ''}
+                          {pide !== null && ` · la venta pide ${pide.toLocaleString('es-MX')}`}
+                          {pide !== null && dif < 0 && ` · ⚠ faltarían ${(-dif).toLocaleString('es-MX')}`}
+                          {pide !== null && dif > 0 && ` · sobran ${dif.toLocaleString('es-MX')}`}
+                          {paq > 1 && ' · el stock se suma en piezas'}
+                        </p>
+                      );
+                    })()}
                     </div>
                   ))}
                   <div className="flex justify-end gap-2 pt-1 border-t border-brain-border text-gray-900 font-semibold">
