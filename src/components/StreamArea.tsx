@@ -1241,7 +1241,7 @@ interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
   cliente?: string; currency_id?: string; moneda_codigo?: string; moneda_so_id?: string;
   monedas_opciones?: { id: string; codigo: string; nombre: string }[]; terminos_pago?: string; terminos_origen?: string; terminos_documento?: string; proveedor_documento?: string; proveedor_leido?: string; sin_terminos_pago?: boolean;
-  tax_code_id?: string; sin_moneda?: boolean; proveedor_extranjero?: boolean; iva_texto?: string;
+  tax_code_id?: string; sin_moneda?: boolean; proveedor_extranjero?: boolean; iva_texto?: string; iva_incierto?: boolean;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
   lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
@@ -1642,7 +1642,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
     (n === null || n === undefined || n === '') ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
   // BORRADOR editable del PO por grupo: lo que el usuario ve aquí es exactamente lo que se crea.
   type LineaDraft = { name: string; mfr_part_no?: string; quantity: number; unit_price?: number };
-  type Edit = { proveedor: string; currency_id: string; lineas: LineaDraft[] };
+  type Edit = { proveedor: string; currency_id: string; lineas: LineaDraft[]; iva?: 'auto' | 'con' | 'sin' };
   const [edits, setEdits] = useState<Record<string, Edit>>(() => Object.fromEntries(
     grupos.map((g) => [g.so_id, { proveedor: g.proveedor_nombre || '', currency_id: g.currency_id || '',
       lineas: g.lineas.map((l) => ({ ...l })) }])));
@@ -1677,7 +1677,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
       return {
         so_id: g.so_id, proveedor_nombre: e.proveedor, currency_id: e.currency_id,
         terminos_pago: g.terminos_pago, tax_code_id: g.tax_code_id,
-        terminos_documento: g.terminos_documento || '', proveedor_documento: g.proveedor_documento || '',
+        terminos_documento: g.terminos_documento || '', proveedor_documento: g.proveedor_documento || '', iva: e.iva || 'auto',
         lineas: e.lineas, nombre: `Compra para ${g.so_nombre || g.so_id}`,
       };
     });
@@ -1809,8 +1809,20 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                   </div>
                 </div>
                 <p className="text-gray-500">
-                  También se crea la <span className="text-gray-700">cuenta por pagar (Bill)</span> ligada al PO por el mismo total, con fecha de hoy, vencimiento según las condiciones del proveedor y esas mismas condiciones. <span className="text-gray-700">{g.iva_texto || 'IVA según el perfil fiscal de la cuenta del cliente'}</span> (se vuelve a evaluar al crear si cambias el proveedor o la moneda).
+                  También se crea la <span className="text-gray-700">cuenta por pagar (Bill)</span> ligada al PO por el mismo total, con fecha de hoy, vencimiento según las condiciones del proveedor y esas mismas condiciones.
                 </p>
+                <div className={`flex flex-wrap items-center gap-2 rounded-md px-2 py-1.5 ${g.iva_incierto && (e.iva || 'auto') === 'auto' ? 'bg-brain-warning-bg' : ''}`}>
+                  <span className="text-gray-500">IVA de las líneas</span>
+                  <select className={inp} value={e.iva || 'auto'} onChange={(ev) => setEd(g.so_id, { iva: ev.target.value as 'auto' | 'con' | 'sin' })}>
+                    <option value="auto">Automático</option>
+                    <option value="con">Con IVA (proveedor nacional)</option>
+                    <option value="sin">Sin IVA (proveedor extranjero)</option>
+                  </select>
+                  <span className="text-gray-700">{(e.iva || 'auto') === 'auto' ? (g.iva_texto || '') : (e.iva === 'con' ? 'Con IVA según el perfil fiscal del cliente' : 'Sin IVA')}</span>
+                </div>
+                {g.iva_incierto && (e.iva || 'auto') === 'auto' && (
+                  <p className="text-amber-700">⚠ No sé si este proveedor es nacional o extranjero (no tiene país en 1CRM): lo decidí por la moneda. Si es nacional lleva IVA aunque cotice en USD; confírmalo arriba.</p>
+                )}
                 {problemasDe(g).length > 0 && (
                   <p className="text-brain-error">⚠ Antes de crear: {problemasDe(g).join('; ')}.</p>
                 )}
