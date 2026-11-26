@@ -1241,7 +1241,7 @@ interface CotejoProveedorGrupo {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_url: string;
   cliente?: string; currency_id?: string; moneda_codigo?: string; moneda_so_id?: string;
   monedas_opciones?: { id: string; codigo: string; nombre: string }[]; terminos_pago?: string; terminos_origen?: string; terminos_documento?: string; proveedor_documento?: string; proveedor_leido?: string; sin_terminos_pago?: boolean;
-  tax_code_id?: string;
+  tax_code_id?: string; sin_moneda?: boolean; proveedor_extranjero?: boolean; iva_texto?: string;
   ya_comprado?: { id: string; nombre: string; url: string } | null;
   proveedor_nombre?: string;
   lineas: { name: string; mfr_part_no?: string; quantity: number; unit_price?: number }[];
@@ -1658,6 +1658,15 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
   };
   const monedaCodigo = (g: CotejoProveedorGrupo, e: Edit) =>
     (g.monedas_opciones || []).find((m) => m.id === e.currency_id)?.codigo || g.moneda_codigo || '';
+  // Lo que impide crear el PO (el servidor lo valida también): moneda elegida y cantidad/precio > 0 en cada línea.
+  const problemasDe = (g: CotejoProveedorGrupo): string[] => {
+    const e = ed(g);
+    const out: string[] = [];
+    if (!e.currency_id) out.push('elige la moneda del proveedor');
+    if (!e.lineas.length || e.lineas.some((l) => !(Number(l.quantity) > 0) || !(Number(l.unit_price) > 0))) out.push('cantidad y precio deben ser mayores a cero en cada línea');
+    return out;
+  };
+  const gruposConProblema = grupos.filter((g) => incluidos.has(g.so_id) && problemasDe(g).length > 0);
 
   async function confirmarCrear() {
     if (!streamId || incluidos.size === 0) return;
@@ -1771,7 +1780,8 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                   <span className="text-gray-500">Proveedor</span>
                   <input className={inp} value={e.proveedor} onChange={(ev) => setEd(g.so_id, { proveedor: ev.target.value })} />
                   <span className="text-gray-500">Moneda</span>
-                  <select className={inp} value={e.currency_id} onChange={(ev) => setEd(g.so_id, { currency_id: ev.target.value })}>
+                  <select className={`${inp} ${!e.currency_id ? 'border-brain-error' : ''}`} value={e.currency_id} onChange={(ev) => setEd(g.so_id, { currency_id: ev.target.value })}>
+                    {!e.currency_id && <option value="">— elige la moneda del proveedor —</option>}
                     {(g.monedas_opciones || []).map((m) => <option key={m.id} value={m.id}>{m.codigo} — {m.nombre}</option>)}
                   </select>
                   <span className="text-gray-500">Condiciones</span>
@@ -1799,8 +1809,11 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
                   </div>
                 </div>
                 <p className="text-gray-500">
-                  También se crea la <span className="text-gray-700">cuenta por pagar (Bill)</span> ligada al PO por el mismo total, con fecha y vencimiento hoy y las mismas condiciones. Impuestos según el perfil fiscal de la cuenta del cliente.
+                  También se crea la <span className="text-gray-700">cuenta por pagar (Bill)</span> ligada al PO por el mismo total, con fecha de hoy, vencimiento según las condiciones del proveedor y esas mismas condiciones. <span className="text-gray-700">{g.iva_texto || 'IVA según el perfil fiscal de la cuenta del cliente'}</span> (se vuelve a evaluar al crear si cambias el proveedor o la moneda).
                 </p>
+                {problemasDe(g).length > 0 && (
+                  <p className="text-brain-error">⚠ Antes de crear: {problemasDe(g).join('; ')}.</p>
+                )}
               </div>
             );
           })()}
@@ -1827,7 +1840,8 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
             Ninguna coincide
           </button>
         )}
-        <button onClick={confirmarCrear} disabled={incluidos.size === 0 || estado !== 'idle'}
+        <button onClick={confirmarCrear} disabled={incluidos.size === 0 || estado !== 'idle' || gruposConProblema.length > 0}
+          title={gruposConProblema.length > 0 ? 'Corrige lo marcado en rojo en el borrador' : undefined}
           className={`${estado === 'idle' ? '' : 'ml-auto'} px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition`}>
           {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : estado === 'cancelado' ? 'Cancelado' : `Confirmar y crear ${incluidos.size || ''} PO(s)`}
         </button>
@@ -1836,7 +1850,7 @@ function CotejoProveedorWidget({ data, streamId, yaConfirmado, onProcesando }: {
   );
 }
 
-interface POCreadoResultado { ok?: boolean; error?: string; po_id?: string; po_url?: string; bill_id?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number }
+interface POCreadoResultado { ok?: boolean; error?: string; po_id?: string; po_url?: string; bill_id?: string; bill_url?: string; so_url?: string | null; proveedor?: string; total?: number; moneda?: string; iva?: string; lineas_creadas?: number; lineas_esperadas?: number }
 function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?: POCreadoResultado[] }; streamId?: string; onProcesando?: (text: string) => void }) {
   const resultados = data.resultados || [];
   const [deshechos, setDeshechos] = useState<Set<number>>(new Set());
@@ -1862,13 +1876,17 @@ function POCreadoWidget({ data, streamId, onProcesando }: { data: { resultados?:
           <div key={i} className="text-[12px] text-gray-700 border-t border-brain-border pt-2 first:border-0 first:pt-0">
             {r.ok ? (
               <>
-                <p className="text-gray-600">{r.proveedor} {r.total !== undefined && `· $${Number(r.total).toLocaleString('es-MX')}`}</p>
+                <p className="text-gray-600">{r.proveedor} {r.total !== undefined && `· $${Number(r.total).toLocaleString('es-MX')} ${r.moneda || ''}`}</p>
+                {r.iva && <p className="text-[11px] text-gray-500">{r.iva}</p>}
+                {r.lineas_creadas !== undefined && r.lineas_creadas !== r.lineas_esperadas && (
+                  <p className="text-[11px] text-brain-error">⚠ El PO quedó con {r.lineas_creadas} de {r.lineas_esperadas} líneas: revísalo en 1CRM.</p>
+                )}
                 <div className="flex items-center gap-3 mt-0.5">
                   {r.po_url && <a href={r.po_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Purchase Order →</a>}
                   {r.bill_url && <a href={r.bill_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Cuenta por pagar →</a>}
                   {r.so_url && <a href={r.so_url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Sales Order →</a>}
                   {deshechos.has(i) ? (
-                    <span className="ml-auto text-[11px] text-gray-500">Deshecho</span>
+                    <span className="ml-auto text-[11px] text-gray-500">Deshacer solicitado (revisa el aviso en el chat)</span>
                   ) : (
                     <button onClick={() => deshacer(i, r)} className="ml-auto text-[11px] text-brain-error hover:text-brain-error">
                       Deshacer
@@ -2874,18 +2892,18 @@ interface VentaEstado {
   so_id: string; so_nombre?: string; so_numero?: string | number; so_stage?: string;
   cliente?: string; so_url?: string;
   comprado?: { total: number; hecho: number; pos?: { id: string; nombre?: string; url?: string }[] };
-  pagado?: { total: number; hecho: number };
+  pagado?: { total: number; hecho: number; parcial?: number };
   recibido?: { total: number; hecho: number };
   facturado?: boolean;
 }
-function EtapaPill({ label, hecho, total, siempre }: { label: string; hecho: number; total?: number; siempre?: boolean }) {
+function EtapaPill({ label, hecho, total, siempre, parcial }: { label: string; hecho: number; total?: number; siempre?: boolean; parcial?: number }) {
   const completo = siempre || (total !== undefined && total > 0 && hecho >= total);
   const pendiente = !siempre && (!total || total === 0);
   const color = completo ? 'bg-brain-success-bg text-brain-success' : pendiente ? 'bg-gray-100 text-gray-500' : 'bg-brain-warning-bg text-amber-700';
   return (
     <div className="flex items-center gap-1.5">
       <span className={`px-2 py-1 rounded text-[10px] font-medium whitespace-nowrap ${color}`}>
-        {label}{!siempre && total ? ` ${hecho}/${total}` : ''}
+        {label}{!siempre && total ? ` ${hecho}/${total}` : ''}{parcial ? ` (${parcial} parcial${parcial > 1 ? 'es' : ''})` : ''}
       </span>
     </div>
   );
@@ -2907,7 +2925,7 @@ function VentaEstadoRow({ v }: { v: VentaEstado }) {
         <span className="text-gray-700">→</span>
         <EtapaPill label="Comprado" hecho={comprado.hecho} total={comprado.total} />
         <span className="text-gray-700">→</span>
-        <EtapaPill label="Pagado" hecho={pagado.hecho} total={pagado.total} />
+        <EtapaPill label="Pagado" hecho={pagado.hecho} total={pagado.total} parcial={pagado.parcial} />
         <span className="text-gray-700">→</span>
         <EtapaPill label="Recibido" hecho={recibido.hecho} total={recibido.total} />
         <span className="text-gray-700">→</span>
