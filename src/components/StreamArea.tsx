@@ -3136,6 +3136,7 @@ interface AlegraBorrador {
   moneda?: string; fecha?: string; vence?: string; terminos?: string; paymentType?: string; paymentMethod?: string; cfdiUse?: string;
   lineas: AlegraLinea[]; subtotal?: number; iva?: number; total?: number; avisos?: string[]; timbrable?: boolean;
   cuenta_alegra?: { empresa?: string; timbrado_listo?: boolean; faltan_para_timbrar?: string[] };
+  bloqueos?: string[]; puede_crear?: boolean; requiere_tipo_cambio?: boolean; tipo_cambio?: number | null;
   error?: string;
 }
 const CFDI_USOS = [['G01', 'G01 · Adquisición de mercancías'], ['G03', 'G03 · Gastos en general'], ['I01', 'I01 · Construcciones'],
@@ -3144,8 +3145,11 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
   const [cfdiUse, setCfdiUse] = useState(data.cfdiUse || 'G03');
   const [lineas, setLineas] = useState<AlegraLinea[]>(() => data.lineas.map((l) => ({ ...l, clave_sat: l.clave_sat || '01010101' })));
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
+  const [tipoCambio, setTipoCambio] = useState<string>(data.tipo_cambio ? String(data.tipo_cambio) : '');
   const money = (n?: number) => (n === undefined || n === null) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
   const inp = 'bg-white border border-brain-border rounded px-1.5 py-1 text-[11px] text-gray-900 focus:outline-none focus:border-brain-accent';
+  // Moneda: sin multimoneda en Alegra (bloqueos) no se crea; con multimoneda hace falta el tipo de cambio.
+  const bloqueado = (data.puede_crear === false) || (!!data.requiere_tipo_cambio && !(Number(tipoCambio) > 0));
   async function crear(timbrar: boolean) {
     if (!streamId) return;
     setEstado('creando');
@@ -3153,7 +3157,7 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: timbrar ? 'Crear y timbrar factura en Alegra' : 'Crear borrador de factura en Alegra',
       procesado: false,
-      metadata: { alegra_action: 'crear', timbrar, draft: { ...data, cfdiUse, lineas } },
+      metadata: { alegra_action: 'crear', timbrar, draft: { ...data, cfdiUse, lineas, tipo_cambio: data.requiere_tipo_cambio ? Number(tipoCambio) : null } },
     });
     setEstado('listo');
   }
@@ -3181,7 +3185,16 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
             {CFDI_USOS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <span className="text-gray-500">Moneda</span><span className="text-gray-900">{data.moneda}</span>
+          {data.requiere_tipo_cambio && (<>
+            <span className="text-gray-500">Tipo de cambio</span>
+            <span className="flex items-center gap-1"><input className={`${inp} w-24`} type="number" min={0} step="0.0001" value={tipoCambio} disabled={estado !== 'idle'} onChange={(e) => setTipoCambio(e.target.value)} /><span className="text-gray-500">MXN por 1 {data.moneda}</span></span>
+          </>)}
         </div>
+        {(data.bloqueos?.length ?? 0) > 0 && (
+          <div className="rounded-lg border border-brain-error/40 bg-red-50 px-3 py-2 text-brain-error space-y-0.5">
+            {(data.bloqueos || []).map((b, i) => <p key={i}>⛔ {b}</p>)}
+          </div>
+        )}
         <div>
           <div className="grid grid-cols-[1fr_90px_44px_80px_80px] gap-1.5 text-[10px] text-gray-500 mb-1">
             <span>Producto</span><span>Clave SAT</span><span>Cant.</span><span>Precio u.</span><span className="text-right">Importe</span>
@@ -3212,11 +3225,12 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
       </div>
       <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en Alegra</span>
-        <button onClick={() => crear(false)} disabled={estado !== 'idle'}
+        <button onClick={() => crear(false)} disabled={estado !== 'idle' || bloqueado}
+          title={bloqueado ? 'No se puede crear: revisa el bloqueo de moneda' : undefined}
           className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-700 border border-brain-border hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
           {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Crear borrador'}
         </button>
-        <button onClick={() => crear(true)} disabled={estado !== 'idle' || !data.timbrable}
+        <button onClick={() => crear(true)} disabled={estado !== 'idle' || !data.timbrable || bloqueado}
           title={data.timbrable ? '' : 'Faltan datos fiscales (ver avisos)'}
           className="px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
           Crear y timbrar
