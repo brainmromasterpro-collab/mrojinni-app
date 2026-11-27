@@ -3135,7 +3135,7 @@ interface AlegraBorrador {
   cliente: { nombre: string; rfc?: string; regimeClient?: string; regimen_1crm?: string; email?: string; cp?: string; alegra_id?: string };
   moneda?: string; fecha?: string; vence?: string; terminos?: string; paymentType?: string; paymentMethod?: string; cfdiUse?: string;
   lineas: AlegraLinea[]; subtotal?: number; iva?: number; total?: number; avisos?: string[]; timbrable?: boolean;
-  cuenta_alegra?: { empresa?: string; timbrado_listo?: boolean; faltan_para_timbrar?: string[] };
+  cuenta_alegra?: { empresa?: string; timbrado_listo?: boolean; faltan_para_timbrar?: string[]; avisos?: string[] };
   bloqueos?: string[]; puede_crear?: boolean; requiere_tipo_cambio?: boolean; tipo_cambio?: number | null;
   error?: string;
 }
@@ -3214,10 +3214,11 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
             <div className="text-gray-900 font-semibold">Total {money(data.total)} {data.moneda}</div>
           </div>
         </div>
-        {(data.avisos?.length || data.cuenta_alegra?.faltan_para_timbrar?.length) ? (
+        {(data.avisos?.length || data.cuenta_alegra?.faltan_para_timbrar?.length || data.cuenta_alegra?.avisos?.length) ? (
           <div className="rounded-lg bg-brain-warning-bg px-3 py-2 text-amber-700 space-y-0.5">
             {(data.avisos || []).map((a, i) => <p key={i}>⚠ {a}</p>)}
             {(data.cuenta_alegra?.faltan_para_timbrar || []).map((a, i) => <p key={`f${i}`}>⚠ En Alegra falta: {a}.</p>)}
+            {(data.cuenta_alegra?.avisos || []).map((a, i) => <p key={`n${i}`}>ℹ {a}</p>)}
             <p className="text-amber-700/80">La clave SAT 01010101 es genérica: pon la real de cada producto antes de timbrar.</p>
           </div>
         ) : null}
