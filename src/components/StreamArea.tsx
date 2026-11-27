@@ -3136,7 +3136,7 @@ interface AlegraBorrador {
   moneda?: string; fecha?: string; vence?: string; terminos?: string; paymentType?: string; paymentMethod?: string; cfdiUse?: string;
   lineas: AlegraLinea[]; subtotal?: number; iva?: number; total?: number; avisos?: string[]; timbrable?: boolean;
   cuenta_alegra?: { empresa?: string; timbrado_listo?: boolean; faltan_para_timbrar?: string[]; avisos?: string[] };
-  bloqueos?: string[]; puede_crear?: boolean; requiere_tipo_cambio?: boolean; tipo_cambio?: number | null;
+  bloqueos?: string[]; puede_crear?: boolean; modo?: string;
   error?: string;
 }
 const CFDI_USOS = [['G01', 'G01 · Adquisición de mercancías'], ['G03', 'G03 · Gastos en general'], ['I01', 'I01 · Construcciones'],
@@ -3145,11 +3145,11 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
   const [cfdiUse, setCfdiUse] = useState(data.cfdiUse || 'G03');
   const [lineas, setLineas] = useState<AlegraLinea[]>(() => data.lineas.map((l) => ({ ...l, clave_sat: l.clave_sat || '01010101' })));
   const [estado, setEstado] = useState<'idle' | 'creando' | 'listo'>(yaConfirmado ? 'listo' : 'idle');
-  const [tipoCambio, setTipoCambio] = useState<string>(data.tipo_cambio ? String(data.tipo_cambio) : '');
   const money = (n?: number) => (n === undefined || n === null) ? '—' : `$${Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`;
   const inp = 'bg-white border border-brain-border rounded px-1.5 py-1 text-[11px] text-gray-900 focus:outline-none focus:border-brain-accent';
-  // Moneda: sin multimoneda en Alegra (bloqueos) no se crea; con multimoneda hace falta el tipo de cambio.
-  const bloqueado = (data.puede_crear === false) || (!!data.requiere_tipo_cambio && !(Number(tipoCambio) > 0));
+  // Moneda: las facturas son solo en MXN; una venta en otra moneda queda bloqueada.
+  const bloqueado = data.puede_crear === false;
+  const enPrueba = (data.modo || 'prueba') !== 'produccion';
   async function crear(timbrar: boolean) {
     if (!streamId) return;
     setEstado('creando');
@@ -3157,7 +3157,7 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
     await supabase.from('mensajes').insert({
       stream_id: streamId, role: 'user', content: timbrar ? 'Crear y timbrar factura en Alegra' : 'Crear borrador de factura en Alegra',
       procesado: false,
-      metadata: { alegra_action: 'crear', timbrar, draft: { ...data, cfdiUse, lineas, tipo_cambio: data.requiere_tipo_cambio ? Number(tipoCambio) : null } },
+      metadata: { alegra_action: 'crear', timbrar, draft: { ...data, cfdiUse, lineas } },
     });
     setEstado('listo');
   }
@@ -3185,11 +3185,12 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
             {CFDI_USOS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
           <span className="text-gray-500">Moneda</span><span className="text-gray-900">{data.moneda}</span>
-          {data.requiere_tipo_cambio && (<>
-            <span className="text-gray-500">Tipo de cambio</span>
-            <span className="flex items-center gap-1"><input className={`${inp} w-24`} type="number" min={0} step="0.0001" value={tipoCambio} disabled={estado !== 'idle'} onChange={(e) => setTipoCambio(e.target.value)} /><span className="text-gray-500">MXN por 1 {data.moneda}</span></span>
-          </>)}
         </div>
+        {enPrueba && (
+          <div className="rounded-lg border border-amber-300 bg-brain-warning-bg px-3 py-2 text-amber-700">
+            🧪 <b>MODO PRUEBA</b> — la empresa de Alegra es la real, así que aquí solo se crea un <b>borrador marcado «[PRUEBA]»</b> en Alegra (se verifica contra lo que Alegra guardó y se puede eliminar). No se timbra, no se crea la Invoice en 1CRM y no se marca la venta como facturada.
+          </div>
+        )}
         {(data.bloqueos?.length ?? 0) > 0 && (
           <div className="rounded-lg border border-brain-error/40 bg-red-50 px-3 py-2 text-brain-error space-y-0.5">
             {(data.bloqueos || []).map((b, i) => <p key={i}>⛔ {b}</p>)}
@@ -3227,12 +3228,12 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
       <div className="px-4 py-2.5 border-t border-brain-border flex items-center gap-2">
         <span className="text-[10px] text-gray-600">Previo · no se ha creado nada en Alegra</span>
         <button onClick={() => crear(false)} disabled={estado !== 'idle' || bloqueado}
-          title={bloqueado ? 'No se puede crear: revisa el bloqueo de moneda' : undefined}
+          title={bloqueado ? 'No se puede crear: la venta no está en MXN' : undefined}
           className="ml-auto px-3 py-1.5 rounded-md text-[12px] font-medium text-gray-700 border border-brain-border hover:border-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition">
-          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : 'Crear borrador'}
+          {estado === 'creando' ? 'Creando…' : estado === 'listo' ? 'Enviado ✓' : (enPrueba ? 'Crear borrador de PRUEBA' : 'Crear borrador')}
         </button>
         <button onClick={() => crear(true)} disabled={estado !== 'idle' || !data.timbrable || bloqueado}
-          title={data.timbrable ? '' : 'Faltan datos fiscales (ver avisos)'}
+          title={enPrueba ? 'Modo prueba: no se timbra (ALEGRA_MODO=produccion lo habilita)' : (data.timbrable ? '' : 'Faltan datos fiscales (ver avisos)')}
           className="px-3 py-1.5 rounded-md text-[12px] font-medium bg-brain-accent text-white disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition">
           Crear y timbrar
         </button>
@@ -3241,7 +3242,7 @@ function AlegraBorradorWidget({ data, streamId, yaConfirmado, onProcesando }: { 
   );
 }
 
-interface AlegraCreada { ok?: boolean; error?: string; invoice_id?: string; estado?: string; numero?: string; total?: number; url?: string; cliente?: string; timbrada?: boolean; cliente_nuevo?: boolean; aviso?: string; crm_invoice?: { ok?: boolean; id?: string; url?: string; error?: string; numero?: string | number } }
+interface AlegraCreada { prueba?: boolean; verificacion?: { ok?: boolean; diferencias?: string[]; total_alegra?: number }; ok?: boolean; error?: string; invoice_id?: string; estado?: string; numero?: string; total?: number; url?: string; cliente?: string; timbrada?: boolean; cliente_nuevo?: boolean; aviso?: string; crm_invoice?: { ok?: boolean; id?: string; url?: string; error?: string; numero?: string | number } }
 function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCreada; streamId?: string; onProcesando?: (text: string) => void }) {
   const [deshecho, setDeshecho] = useState(false);
   async function deshacer() {
@@ -3263,8 +3264,11 @@ function AlegraCreadaWidget({ data, streamId, onProcesando }: { data: AlegraCrea
         {data.ok ? (
           <>
             <p>{data.cliente} · {data.total !== undefined && `$${Number(data.total).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`} · estado: {data.estado}{data.cliente_nuevo ? ' · cliente dado de alta' : ''}</p>
-            {data.aviso && <p className="text-amber-700">⚠ {data.aviso}</p>}
-            {data.crm_invoice && !data.crm_invoice.ok && <p className="text-amber-700">⚠ No se creó la Invoice en 1CRM: {data.crm_invoice.error}</p>}
+            {data.aviso && <p className="text-amber-700">{data.prueba ? '🧪' : '⚠'} {data.aviso}</p>}
+            {data.verificacion && (data.verificacion.ok
+              ? <p className="text-brain-success">✓ Verificada contra Alegra: cliente, líneas, cantidades, precios, IVA y total coinciden{data.verificacion.total_alegra !== undefined ? ` (total ${Number(data.verificacion.total_alegra).toLocaleString('es-MX', { minimumFractionDigits: 2 })})` : ''}.</p>
+              : <div className="text-brain-error"><p>⚠ Alegra guardó algo distinto de lo enviado:</p>{(data.verificacion.diferencias || []).map((d, i) => <p key={i}>• {d}</p>)}</div>)}
+            {data.crm_invoice && !data.crm_invoice.ok && !(data.crm_invoice as { omitido?: string }).omitido && <p className="text-amber-700">⚠ No se creó la Invoice en 1CRM: {data.crm_invoice.error}</p>}
             <div className="flex items-center gap-3">
               {data.url && <a href={data.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Ver en Alegra →</a>}
               {data.crm_invoice?.ok && data.crm_invoice.url && <a href={data.crm_invoice.url} target="_blank" rel="noreferrer" className="text-brain-accent hover:underline">Invoice en 1CRM →</a>}
